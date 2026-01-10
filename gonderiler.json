@@ -1,0 +1,76 @@
+[
+  {
+    "id": 1767719968555,
+    "yazar": "Abdullah Karakuş",
+    "bolum": "International Relations",
+    "icerik": "Mobil Uygulamamızın İlk Postu Hayırlı Olsun...🎉🎉🎉🥹🥹🥹\n\nmade by Abdullah Karakuş",
+    "tarih": "06.01.2026 20:19:28",
+    "begeni": 1,
+    "yorum": 0,
+    "begenenler": [
+      "Abdullah Karakuş"
+    ]
+  },
+  {
+    "id": 1767728836766,
+    "yazar": "Abdullah Karakuş",
+    "bolum": "International Relations",
+    "icerik": "Kampüsümüzün ilk paylaşımı hayırlı olsun...🥹🎉🎉🎉",
+    "tarih": "06.01.2026 22:47:16",
+    "begeni": 1,
+    "yorum": 0,
+    "begenenler": [
+      "Abdullah Karakuş"
+    ]
+  },
+  {
+    "id": 1767729978498,
+    "yazar": "Abdullah Karakuş",
+    "bolum": "International Relations",
+    "icerik": "Görselli İlk Gönderi Denemesi",
+    "resimUrl": "uploads/1767729978480-984172374.webp",
+    "tarih": "06.01.2026 23:06:18",
+    "begeni": 1,
+    "yorum": 0,
+    "begenenler": [
+      "Abdullah Karakuş"
+    ]
+  },
+  {
+    "id": 1767735234167,
+    "yazar": "Abdullah Karakuş",
+    "bolum": "International Relations",
+    "icerik": "ikinci görselli gönderi denemesi",
+    "resimUrl": null,
+    "tarih": "07.01.2026 00:33:54",
+    "begeni": 5,
+    "yorum": 1,
+    "yorumlar": [
+      {
+        "id": 1767806861767,
+        "yazar": "Abdullah Karakuş",
+        "profilResim": "uploads/1767804800617-78965381.jpg",
+        "icerik": "aaaa",
+        "tarih": "07.01.2026 20:27"
+      }
+    ],
+    "begenenler": [
+      "Abdullah Karakuş"
+    ]
+  },
+  {
+    "id": 1767806907847,
+    "yazar": "Abdullah Karakuş",
+    "bolum": "Uluslararası İlişkiler",
+    "profilResim": "uploads/1767804800617-78965381.jpg",
+    "icerik": "......",
+    "resimUrl": null,
+    "tarih": "07.01.2026 20:28",
+    "begeni": 1,
+    "yorum": 0,
+    "yorumlar": [],
+    "begenenler": [
+      "Abdullah Karakuş"
+    ]
+  }
+]

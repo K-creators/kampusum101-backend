@@ -1,0 +1,25 @@
+[
+  {
+    "id": 1767809258956,
+    "adSoyad": "Abdullah Karakuş",
+    "kullaniciAdi": "abdullahkarakus",
+    "email": "karakus.apo444@gmail.com",
+    "sifre": "Dayokindinde_37",
+    "bolum": "International Relations",
+    "bio": "Merhaba, ben yeni bir Kampüsüm101 üyesiyim!",
+    "resimUrl": "uploads/1767810922696-599968151.webp"
+  },
+  {
+    "id": 1767819734622,
+    "adSoyad": "Abdullah Karakuş",
+    "kullaniciAdi": "apokarakus",
+    "email": "234195035@hitit.edu.tr",
+    "sifre": "karakus1980",
+    "bolum": "IR",
+    "rol": "akademisyen",
+    "bio": "Merhaba, ben bir Akademisyenim!",
+    "resimUrl": null,
+    "takipciler": [],
+    "takipEdilenler": []
+  }
+]
