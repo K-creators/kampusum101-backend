@@ -75,15 +75,13 @@ const DuyuruSchema = new mongoose.Schema({
 });
 const Duyuru = mongoose.model('Duyuru', DuyuruSchema);
 
-// --- E-POSTA AYARLARI (BREVO - Render Environment Variables Kullanır) ---
 const transporter = nodemailer.createTransport({
     host: "smtp-relay.brevo.com",
-    port: 587,
+    port: 2525, 
     secure: false,
     auth: {
-        // Bu değişkenleri Render panelinde tanımlamayı unutma!
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS
+        user: process.env.EMAIL_USER, // Değişken kullanıyoruz
+        pass: process.env.EMAIL_PASS  // Değişken kullanıyoruz
     },
     tls: {
         rejectUnauthorized: false
@@ -140,7 +138,7 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
     res.json({ durum: 'basarili', mesaj: 'Doğrulama kodu e-postana gönderiliyor.' });
 
     transporter.sendMail({
-        from: '"Kampüsüm101 Destek" <kampusum101@info.com>', // Buraya bir gönderici adı yaz
+        from: '"Kampüsüm101 Destek" <kampusum101info@gmail.com>', // DÜZELTİLDİ: Giriş mailinle aynı olmalı
         to: email,
         subject: 'Şifre Sıfırlama Kodu',
         text: `Merhaba ${kullanici.adSoyad},\n\nŞifreni sıfırlamak için kodun: ${kod}\n\nBu işlemi sen yapmadıysan dikkate alma.`
@@ -191,7 +189,7 @@ app.post('/api/kayit-istek', async (req, res) => {
     res.json({ durum: 'basarili', mesaj: 'Kod gönderildi!', tespitEdilenRol: belirlenenRol });
 
     transporter.sendMail({
-        from: '"Kampüsüm101 Güvenlik" <kampusum101@info.com>', 
+        from: '"Kampüsüm101 Güvenlik" <kampusum101info@gmail.com>', // DÜZELTİLDİ: Giriş mailinle aynı olmalı
         to: email, 
         subject: 'Doğrulama Kodu', 
         text: `Kodun: ${dogrulamaKodu}`
