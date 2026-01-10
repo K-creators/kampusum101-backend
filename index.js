@@ -75,13 +75,22 @@ const DuyuruSchema = new mongoose.Schema({
 });
 const Duyuru = mongoose.model('Duyuru', DuyuruSchema);
 
+// --- KONTROL LOGLARI (BURAYI EKLEDİM) ---
+console.log("------------------------------------------");
+console.log("📧 E-POSTA AYARLARI KONTROLÜ:");
+console.log("1. Kullanıcı (User):", process.env.EMAIL_USER); 
+console.log("2. Şifre Var mı?:", process.env.EMAIL_PASS ? "EVET ✅" : "HAYIR ❌");
+console.log("3. Şifre Uzunluğu:", process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0);
+console.log("------------------------------------------");
+
+// --- E-POSTA AYARLARI (BREVO) ---
 const transporter = nodemailer.createTransport({
     host: "smtp-relay.brevo.com",
     port: 2525, 
     secure: false,
     auth: {
-        user: process.env.EMAIL_USER, // Değişken kullanıyoruz
-        pass: process.env.EMAIL_PASS  // Değişken kullanıyoruz
+        user: process.env.EMAIL_USER, // Render'dan çekecek
+        pass: process.env.EMAIL_PASS  // Render'dan çekecek
     },
     tls: {
         rejectUnauthorized: false
@@ -138,7 +147,7 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
     res.json({ durum: 'basarili', mesaj: 'Doğrulama kodu e-postana gönderiliyor.' });
 
     transporter.sendMail({
-        from: '"Kampüsüm101 Destek" <kampusum101info@gmail.com>', // DÜZELTİLDİ: Giriş mailinle aynı olmalı
+        from: '"Kampüsüm101 Destek" <kampusum101info@gmail.com>', 
         to: email,
         subject: 'Şifre Sıfırlama Kodu',
         text: `Merhaba ${kullanici.adSoyad},\n\nŞifreni sıfırlamak için kodun: ${kod}\n\nBu işlemi sen yapmadıysan dikkate alma.`
@@ -189,7 +198,7 @@ app.post('/api/kayit-istek', async (req, res) => {
     res.json({ durum: 'basarili', mesaj: 'Kod gönderildi!', tespitEdilenRol: belirlenenRol });
 
     transporter.sendMail({
-        from: '"Kampüsüm101 Güvenlik" <kampusum101info@gmail.com>', // DÜZELTİLDİ: Giriş mailinle aynı olmalı
+        from: '"Kampüsüm101 Güvenlik" <kampusum101info@gmail.com>', 
         to: email, 
         subject: 'Doğrulama Kodu', 
         text: `Kodun: ${dogrulamaKodu}`
