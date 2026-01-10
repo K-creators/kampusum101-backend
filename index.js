@@ -75,14 +75,6 @@ const DuyuruSchema = new mongoose.Schema({
 });
 const Duyuru = mongoose.model('Duyuru', DuyuruSchema);
 
-// --- KONTROL LOGLARI (BURAYI EKLEDİM) ---
-console.log("------------------------------------------");
-console.log("📧 E-POSTA AYARLARI KONTROLÜ:");
-console.log("1. Kullanıcı (User):", process.env.EMAIL_USER); 
-console.log("2. Şifre Var mı?:", process.env.EMAIL_PASS ? "EVET ✅" : "HAYIR ❌");
-console.log("3. Şifre Uzunluğu:", process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0);
-console.log("------------------------------------------");
-
 // --- E-POSTA AYARLARI (BREVO) ---
 const transporter = nodemailer.createTransport({
     host: "smtp-relay.brevo.com",
