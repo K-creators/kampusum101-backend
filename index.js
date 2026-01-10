@@ -81,8 +81,8 @@ const transporter = nodemailer.createTransport({
     port: 2525, 
     secure: false,
     auth: {
-        user: process.env.EMAIL_USER, // Render'dan çekecek
-        pass: process.env.EMAIL_PASS  // Render'dan çekecek
+        user: process.env.EMAIL_USER, // Render Environment'tan çekecek
+        pass: process.env.EMAIL_PASS  // Render Environment'tan çekecek
     },
     tls: {
         rejectUnauthorized: false
@@ -281,8 +281,15 @@ app.get('/api/kullanici/:id', async (req, res) => {
     } catch(e) { res.status(404).json({}); }
 });
 
+// --- PROFIL GUNCELLE (ID KONTROLU EKLENDI) ---
 app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => { 
     const {id,adSoyad,kullaniciAdi,bolum,bio} = req.body; 
+    
+    // GÜVENLİK: ID null veya boş gelirse işlemi durdur
+    if(!id || id === "null" || id === "undefined") {
+        return res.status(400).json({durum:'hata', mesaj: 'Geçersiz Kullanıcı ID'});
+    }
+
     if(kullaniciAdi) {
         const varMi = await Kullanici.findOne({ kullaniciAdi: kullaniciAdi, _id: { $ne: id } });
         if(varMi) return res.status(400).json({durum:'hata', mesaj: 'Kullanıcı adı dolu'});
@@ -292,8 +299,13 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     const guncelVeri = { adSoyad, kullaniciAdi, bolum, bio };
     if(r) guncelVeri.resimUrl = r;
 
-    const yeniProfil = await Kullanici.findByIdAndUpdate(id, guncelVeri, { new: true });
-    res.json({durum:'basarili', yeniProfil}); 
+    try {
+        const yeniProfil = await Kullanici.findByIdAndUpdate(id, guncelVeri, { new: true });
+        res.json({durum:'basarili', yeniProfil}); 
+    } catch(e) {
+        console.error(e);
+        res.status(500).json({durum:'hata', mesaj: 'Sunucu hatası'});
+    }
 });
 
 app.post('/api/yoklama', async (req, res) => { 
