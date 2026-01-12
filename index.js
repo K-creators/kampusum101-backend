@@ -281,11 +281,11 @@ app.get('/api/kullanici/:id', async (req, res) => {
     } catch(e) { res.status(404).json({}); }
 });
 
-// --- PROFIL GUNCELLE (ID KONTROLU EKLENDI) ---
+// --- PROFIL GUNCELLE (ID KONTROLU) ---
 app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => { 
     const {id,adSoyad,kullaniciAdi,bolum,bio} = req.body; 
     
-    // GÜVENLİK: ID null veya boş gelirse işlemi durdur
+    // GÜVENLİK: ID kontrolü
     if(!id || id === "null" || id === "undefined") {
         return res.status(400).json({durum:'hata', mesaj: 'Geçersiz Kullanıcı ID'});
     }
@@ -335,45 +335,73 @@ app.get('/api/akis', async (req, res) => {
     res.json(gonderiler); 
 });
 
+// --- GONDERİ SİL (DÜZELTİLDİ: ID KONTROLÜ EKLENDİ) ---
 app.delete('/api/gonderi-sil/:id', async (req, res) => { 
-    await Gonderi.findByIdAndDelete(req.params.id);
-    res.json({durum:'basarili'}); 
+    const { id } = req.params;
+    // ÇÖKME ENGELLEYİCİ: ID null veya geçersizse dur
+    if(!id || id === "null" || id === "undefined" || id.length < 24) {
+        return res.status(400).json({durum:'hata', mesaj: 'Geçersiz Gönderi ID'});
+    }
+    
+    try {
+        await Gonderi.findByIdAndDelete(id);
+        res.json({durum:'basarili'}); 
+    } catch(e) {
+        res.status(500).json({durum:'hata', mesaj: 'Silme başarısız'});
+    }
 });
 
 app.post('/api/gonderi/:id/begen', async (req, res) => { 
-    const {yazar} = req.body; 
-    const g = await Gonderi.findById(req.params.id); 
-    if(g){ 
-        if(!g.begenenler.includes(yazar)){
-            g.begenenler.push(yazar);
-            g.begeni += 1;
-        }else{
-            const i = g.begenenler.indexOf(yazar);
-            g.begenenler.splice(i,1);
-            g.begeni = Math.max(0, g.begeni-1);
-        } 
-        await g.save();
-        res.json({durum:'basarili',yeniBegeni:g.begeni,begenenler:g.begenenler}); 
-    } else res.status(404).json({durum:'hata'}); 
+    const { id } = req.params;
+    const { yazar } = req.body; 
+    
+    if(!id || id === "null" || id.length < 24) return res.status(400).json({durum:'hata'});
+
+    try {
+        const g = await Gonderi.findById(id); 
+        if(g){ 
+            if(!g.begenenler.includes(yazar)){
+                g.begenenler.push(yazar);
+                g.begeni += 1;
+            }else{
+                const i = g.begenenler.indexOf(yazar);
+                g.begenenler.splice(i,1);
+                g.begeni = Math.max(0, g.begeni-1);
+            } 
+            await g.save();
+            res.json({durum:'basarili',yeniBegeni:g.begeni,begenenler:g.begenenler}); 
+        } else res.status(404).json({durum:'hata'}); 
+    } catch(e) { res.status(500).json({durum:'hata'}); }
 });
 
 app.post('/api/gonderi/:id/yorum', async (req, res) => { 
+    const { id } = req.params;
+    if(!id || id === "null" || id.length < 24) return res.status(400).json({durum:'hata'});
+
     const {icerik,yazar,kullaniciAdi,profilResim} = req.body; 
-    const g = await Gonderi.findById(req.params.id); 
-    if(g){ 
-        g.yorumlar.push({yazar,kullaniciAdi,profilResim,icerik,tarih:tarihGetir()}); 
-        await g.save();
-        res.json({durum:'basarili',yorumlar:g.yorumlar,yorumSayisi:g.yorumlar.length}); 
-    } else res.status(404).json({durum:'hata'}); 
+    
+    try {
+        const g = await Gonderi.findById(id); 
+        if(g){ 
+            g.yorumlar.push({yazar,kullaniciAdi,profilResim,icerik,tarih:tarihGetir()}); 
+            await g.save();
+            res.json({durum:'basarili',yorumlar:g.yorumlar,yorumSayisi:g.yorumlar.length}); 
+        } else res.status(404).json({durum:'hata'}); 
+    } catch(e) { res.status(500).json({durum:'hata'}); }
 });
 
 app.delete('/api/gonderi/:id/yorum/:yorumId', async (req, res) => { 
-    const g = await Gonderi.findById(req.params.id);
-    if(g) {
-        g.yorumlar = g.yorumlar.filter(y => y._id.toString() !== req.params.yorumId);
-        await g.save();
-        res.json({durum:'basarili',yorumlar:g.yorumlar});
-    } else res.status(404).json({durum:'hata'});
+    const { id } = req.params;
+    if(!id || id === "null" || id.length < 24) return res.status(400).json({durum:'hata'});
+
+    try {
+        const g = await Gonderi.findById(id);
+        if(g) {
+            g.yorumlar = g.yorumlar.filter(y => y._id.toString() !== req.params.yorumId);
+            await g.save();
+            res.json({durum:'basarili',yorumlar:g.yorumlar});
+        } else res.status(404).json({durum:'hata'});
+    } catch(e) { res.status(500).json({durum:'hata'}); }
 });
 
 app.get('/api/gonderilerim', async (req, res) => { 
