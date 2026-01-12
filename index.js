@@ -4,6 +4,9 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const nodemailer = require('nodemailer');
+// --- CLOUDINARY KÜTÜPHANELERİ ---
+const { v2: cloudinary } = require('cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const mongoose = require('mongoose');
 const app = express();
 
@@ -89,16 +92,27 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// --- DOSYA YÜKLEME AYARLARI ---
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) { cb(null, 'uploads/') },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname)); 
-    }
+// ============================================================
+// CLOUDINARY AYARLARI (TEK VE DOĞRU DEPOLAMA YÖNTEMİ)
+// ============================================================
+// Render Environment Variables'a bu 3 anahtarı eklemeyi unutma!
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'kampusum101_uploads', // Cloudinary'de bu klasöre kaydeder
+        allowed_formats: ['jpg', 'png', 'jpeg', 'heic'],
+    },
+});
+
+// DİKKAT: Burada 'storage' değişkenini Cloudinary ile oluşturduk.
+// Aşağıda TEKRAR 'multer.diskStorage' tanımlarsan bozulur. Onu kaldırdım.
 const upload = multer({ storage: storage });
-app.use('/uploads', express.static('uploads'));
 
 // --- GEÇİCİ BELLEK ---
 let onayBekleyenler = {}; 
@@ -281,11 +295,10 @@ app.get('/api/kullanici/:id', async (req, res) => {
     } catch(e) { res.status(404).json({}); }
 });
 
-// --- PROFIL GUNCELLE (ID KONTROLU) ---
+// --- PROFİL GUNCELLE (CLOUDINARY) ---
 app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => { 
     const {id,adSoyad,kullaniciAdi,bolum,bio} = req.body; 
     
-    // GÜVENLİK: ID kontrolü
     if(!id || id === "null" || id === "undefined") {
         return res.status(400).json({durum:'hata', mesaj: 'Geçersiz Kullanıcı ID'});
     }
@@ -295,9 +308,12 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
         if(varMi) return res.status(400).json({durum:'hata', mesaj: 'Kullanıcı adı dolu'});
     }
     
-    const r = req.file ? req.file.path.replace(/\\/g,"/") : undefined;
+    // Cloudinary kullanırken req.file.path direkt bize URL'i verir.
+    // replace işlemine gerek yoktur.
+    const resimUrl = req.file ? req.file.path : undefined;
+
     const guncelVeri = { adSoyad, kullaniciAdi, bolum, bio };
-    if(r) guncelVeri.resimUrl = r;
+    if(resimUrl) guncelVeri.resimUrl = resimUrl;
 
     try {
         const yeniProfil = await Kullanici.findByIdAndUpdate(id, guncelVeri, { new: true });
@@ -319,12 +335,15 @@ app.post('/api/yoklama', async (req, res) => {
     res.json({durum:'basarili', mesaj:'Yoklama alındı!'}); 
 });
 
+// --- GÖNDERİ PAYLAŞ (CLOUDINARY) ---
 app.post('/api/gonderi-paylas', upload.single('resim'), async (req, res) => { 
     const {icerik,yazar,kullaniciAdi,bolum,profilResim,yazarId} = req.body; 
-    const r = req.file ? req.file.path.replace(/\\/g,"/") : null; 
+    
+    // Cloudinary URL'si
+    const resimUrl = req.file ? req.file.path : null;
     
     await new Gonderi({
-        yazarId, yazar, kullaniciAdi, bolum, profilResim, icerik, resimUrl:r, tarih:tarihGetir()
+        yazarId, yazar, kullaniciAdi, bolum, profilResim, icerik, resimUrl:resimUrl, tarih:tarihGetir()
     }).save();
     
     res.json({durum:'basarili'}); 
@@ -335,14 +354,11 @@ app.get('/api/akis', async (req, res) => {
     res.json(gonderiler); 
 });
 
-// --- GONDERİ SİL (DÜZELTİLDİ: ID KONTROLÜ EKLENDİ) ---
 app.delete('/api/gonderi-sil/:id', async (req, res) => { 
     const { id } = req.params;
-    // ÇÖKME ENGELLEYİCİ: ID null veya geçersizse dur
     if(!id || id === "null" || id === "undefined" || id.length < 24) {
         return res.status(400).json({durum:'hata', mesaj: 'Geçersiz Gönderi ID'});
     }
-    
     try {
         await Gonderi.findByIdAndDelete(id);
         res.json({durum:'basarili'}); 
