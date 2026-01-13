@@ -150,13 +150,23 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     res.json({ durum: 'basarili', yeniProfil });
 });
 
-app.post('/api/gonderi-paylas', upload.single('resim'), async (req, res) => { 
-    const {icerik, yazar, kullaniciAdi, bolum, profilResim, yazarId} = req.body;
-    const resimUrl = req.file ? req.file.path : null;
-    await new Gonderi({
-        yazarId, yazar, kullaniciAdi, bolum, profilResim, icerik, resimUrl, tarih: tarihGetir()
-    }).save();
-    res.json({ durum: 'basarili' });
+app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
+    // yazarId'yi de req.body'den alıyoruz
+    const { yazar, yazarId, kullaniciAdi, bolum, icerik, profilResim } = req.body; 
+    
+    // Cloudinary işlemleri vs...
+    
+    const yeniGonderi = new Gonderi({
+        yazarId, // <--- KAYDEDİYORUZ
+        yazar,
+        kullaniciAdi,
+        bolum,
+        icerik,
+        profilResim,
+        resimUrl: result ? result.secure_url : null, // Varsa resim linki
+        tarih: tarihGetir()
+    });
+    // ...
 });
 
 app.get('/api/akis', async (req, res) => { 
@@ -189,10 +199,17 @@ app.get('/api/kullanici/:id', async (req, res) => {
 });
 
 // Profil Sayfasında "Gönderilerim" Kısmı
-app.get('/api/gonderilerim', async (req, res) => { 
-    const y = req.query.yazar; 
-    const gonderiler = await Gonderi.find({ yazar: y }).sort({ _id: -1 });
-    res.json(gonderiler); 
+app.get('/api/gonderilerim', async (req, res) => {
+    try {
+        const { yazarId } = req.query; // <--- ARTIK ID BEKLİYORUZ
+        if(!yazarId) return res.json([]);
+        
+        // Veritabanında yazarId'si eşleşenleri bul
+        const gonderiler = await Gonderi.find({ yazarId: yazarId }).sort({ _id: -1 });
+        res.json(gonderiler);
+    } catch (e) {
+        res.status(500).json({ hata: e.message });
+    }
 });
 
 // Gönderi Beğenme
