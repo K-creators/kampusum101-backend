@@ -165,10 +165,13 @@ app.get('/api/akis', async (req, res) => {
 
 app.post('/api/gonderi/:id/yorum', async (req, res) => {
     const { id } = req.params;
-    const { icerik, yazar, profilResim } = req.body;
+    // profilResim'i buradan alıyoruz
+    const { icerik, yazar, profilResim } = req.body; 
+    
     const g = await Gonderi.findById(id);
     if(g) {
-        g.yorumlar.push({ yazar, icerik, tarih: tarihGetir() });
+        // Ve veritabanına itiyoruz
+        g.yorumlar.push({ yazar, icerik, profilResim, tarih: tarihGetir() });
         await g.save();
         res.json({ durum: 'basarili', yorumlar: g.yorumlar });
     } else res.status(404).json({ durum: 'hata' });
