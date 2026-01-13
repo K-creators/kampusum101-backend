@@ -81,22 +81,17 @@ const tarihGetir = () => {
 
 app.get('/', (req, res) => res.send('API Aktif'));
 
-// 1. KAYIT (BASİTLEŞTİRİLMİŞ)
+// 1. KAYIT
 app.post('/api/kayit', async (req, res) => {
     const { adSoyad, kullaniciAdi, email, sifre } = req.body;
-    
     const emailVar = await Kullanici.findOne({ email });
     if (emailVar) return res.status(400).json({ durum: 'hata', mesaj: 'E-posta zaten kayıtlı!' });
-    
     const nickVar = await Kullanici.findOne({ kullaniciAdi });
     if (nickVar) return res.status(400).json({ durum: 'hata', mesaj: 'Kullanıcı adı alınmış!' });
 
     const yeniKullanici = new Kullanici({ 
-        adSoyad, kullaniciAdi, email, sifre, 
-        bolum: "Öğrenci", 
-        resimUrl: "" 
+        adSoyad, kullaniciAdi, email, sifre, bolum: "Öğrenci", resimUrl: "" 
     });
-    
     await yeniKullanici.save();
     res.json({ durum: 'basarili', mesaj: 'Kayıt başarılı! Giriş yapabilirsiniz.' });
 });
@@ -109,7 +104,7 @@ app.post('/api/giris', async (req, res) => {
     else res.status(401).json({ durum: 'hata', mesaj: 'Hatalı bilgiler' });
 });
 
-// 3. MESAJLAŞMA SİSTEMİ
+// 3. MESAJLAŞMA
 app.post('/api/mesaj-gonder', async (req, res) => {
     const { gonderenId, aliciId, icerik } = req.body;
     await new Mesaj({ gonderenId, aliciId, icerik }).save();
@@ -119,18 +114,13 @@ app.post('/api/mesaj-gonder', async (req, res) => {
 app.get('/api/mesajlar/:uid1/:uid2', async (req, res) => {
     const { uid1, uid2 } = req.params;
     const mesajlar = await Mesaj.find({
-        $or: [
-            { gonderenId: uid1, aliciId: uid2 },
-            { gonderenId: uid2, aliciId: uid1 }
-        ]
+        $or: [ { gonderenId: uid1, aliciId: uid2 }, { gonderenId: uid2, aliciId: uid1 } ]
     }).sort({ tarih: 1 });
     res.json(mesajlar);
 });
 
-// Kullanıcının mesajlaştığı kişileri bul (Basit versiyon)
+// Sohbet Listesi
 app.get('/api/sohbet-gecmisi/:myId', async (req, res) => {
-    // Bu kısım normalde aggregation ile yapılır ama basit tutuyoruz
-    // Tüm kullanıcıları getir, frontendde filtrele (MVP için)
     const users = await Kullanici.find({ _id: { $ne: req.params.myId } });
     res.json(users);
 });
@@ -181,6 +171,47 @@ app.post('/api/gonderi/:id/yorum', async (req, res) => {
         await g.save();
         res.json({ durum: 'basarili', yorumlar: g.yorumlar });
     } else res.status(404).json({ durum: 'hata' });
+});
+
+// --- İŞTE EKSİK OLAN VE SORUN ÇIKARAN ROTALAR BURADA ---
+
+// Profil Sayfası İçin Kullanıcı Bilgisi Çekme
+app.get('/api/kullanici/:id', async (req, res) => {
+    try {
+        const k = await Kullanici.findById(req.params.id);
+        if(k) res.json(k);
+        else res.status(404).json({});
+    } catch(e) { res.status(404).json({}); }
+});
+
+// Profil Sayfasında "Gönderilerim" Kısmı
+app.get('/api/gonderilerim', async (req, res) => { 
+    const y = req.query.yazar; 
+    const gonderiler = await Gonderi.find({ yazar: y }).sort({ _id: -1 });
+    res.json(gonderiler); 
+});
+
+// Gönderi Beğenme
+app.post('/api/gonderi/:id/begen', async (req, res) => {
+    const { id } = req.params;
+    const { yazar } = req.body;
+    try {
+        const g = await Gonderi.findById(id);
+        if(g) {
+            if(!g.begenenler.includes(yazar)) { g.begenenler.push(yazar); g.begeni++; }
+            else { g.begenenler = g.begenenler.filter(x => x !== yazar); g.begeni--; }
+            await g.save();
+            res.json({ durum: 'basarili' });
+        } else res.status(404).json({ durum: 'hata' });
+    } catch(e) { res.status(500).json({ durum: 'hata' }); }
+});
+
+// Gönderi Silme
+app.delete('/api/gonderi-sil/:id', async (req, res) => {
+    try {
+        await Gonderi.findByIdAndDelete(req.params.id);
+        res.json({ durum: 'basarili' });
+    } catch(e) { res.status(500).json({ durum: 'hata' }); }
 });
 
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
