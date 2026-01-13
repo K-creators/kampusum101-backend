@@ -213,5 +213,16 @@ app.delete('/api/gonderi-sil/:id', async (req, res) => {
         res.json({ durum: 'basarili' });
     } catch(e) { res.status(500).json({ durum: 'hata' }); }
 });
-
+app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
+    try {
+        const { gonderiId, yorumId } = req.params;
+        // Gonderi içindeki yorumlar dizisinden, o id'li yorumu çekip çıkarır ($pull)
+        await Gonderi.findByIdAndUpdate(gonderiId, {
+            $pull: { yorumlar: { _id: yorumId } }
+        });
+        res.json({ durum: 'basarili' });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata' });
+    }
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
