@@ -55,6 +55,7 @@ const GonderiSchema = new mongoose.Schema({
     yorumlar: [{
         yazar: String,
         icerik: String,
+        profilResim: String,
         tarih: String
     }]
 });
@@ -164,7 +165,7 @@ app.get('/api/akis', async (req, res) => {
 
 app.post('/api/gonderi/:id/yorum', async (req, res) => {
     const { id } = req.params;
-    const { icerik, yazar } = req.body;
+    const { icerik, yazar, profilResim } = req.body;
     const g = await Gonderi.findById(id);
     if(g) {
         g.yorumlar.push({ yazar, icerik, tarih: tarihGetir() });
