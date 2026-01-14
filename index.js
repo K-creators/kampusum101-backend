@@ -419,4 +419,28 @@ app.post('/api/dosya-yukle', upload.single('dosya'), (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+// --- KULLANICI ARAMA ROTASI ---
+app.get('/api/kullanici-ara/:query', async (req, res) => {
+    try {
+        const query = req.params.query;
+        
+        // Boş arama yapılırsa boş dizi dön
+        if (!query || query.trim() === "") {
+            return res.json([]);
+        }
+
+        // Regex ile arama (Büyük/küçük harf duyarsız 'i' flag'i)
+        // Hem Ad Soyad hem de Kullanıcı Adı içinde arar
+        const users = await Kullanici.find({
+            $or: [
+                { adSoyad: { $regex: query, $options: 'i' } },
+                { kullaniciAdi: { $regex: query, $options: 'i' } }
+            ]
+        }).select('adSoyad kullaniciAdi resimUrl bolum'); // Sadece gerekli alanları getir (Hız için)
+
+        res.json(users);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
