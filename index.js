@@ -553,8 +553,15 @@ app.post('/api/kullanici-takip', async (req, res) => {
             
             // 2. Senin takip ettiklerine hedefi ekle
             await aktifKullanici.updateOne({ $push: { takipEdilenler: hedefKullaniciId } });
-            
+            const yeniBildirim = new Bildirim({
+                aliciId: hedefKullaniciId,
+                gonderenId: aktifKullaniciId,
+                tur: 'takip',
+                mesaj: 'seni takip etmeye başladı.'
+            });
+            await yeniBildirim.save();
             res.json({ durum: 'basarili', islem: 'takip_edildi', mesaj: 'Takip edildi' });
+            
         }
 
     } catch (e) {
