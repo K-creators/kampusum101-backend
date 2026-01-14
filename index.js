@@ -285,7 +285,6 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
         // Diğer Bilgiler
         if (adSoyad) user.adSoyad = adSoyad;
         if (bolum) user.bolum = bolum;
-        if (bio) user.bio = bio;
         if (req.file) user.resimUrl = req.file.path;
 
         // CV Güncelleme (JSON string olarak gelirse parse et, obje gelirse direkt al)
@@ -295,6 +294,11 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
                 try { cvData = JSON.parse(ozgecmis); } catch(e) {}
             }
             user.ozgecmis = { ...user.ozgecmis, ...cvData };
+
+            // BURASI YENİ: CV'deki Bölüm bilgisini ana profile de eşitle
+            if (cvData.bolum) {
+                user.bolum = cvData.bolum;
+            }
         }
 
         await user.save();
