@@ -443,4 +443,49 @@ app.get('/api/kullanici-ara/:query', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+// --- TAKİP ET / TAKİBİ BIRAK ROTASI ---
+app.post('/api/kullanici-takip', async (req, res) => {
+    const { aktifKullaniciId, hedefKullaniciId } = req.body;
+
+    if (aktifKullaniciId === hedefKullaniciId) {
+        return res.status(400).json({ durum: 'hata', mesaj: 'Kendini takip edemezsin' });
+    }
+
+    try {
+        // İki kullanıcıyı da bul
+        const aktifKullanici = await Kullanici.findById(aktifKullaniciId);
+        const hedefKullanici = await Kullanici.findById(hedefKullaniciId);
+
+        if (!aktifKullanici || !hedefKullanici) {
+            return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı' });
+        }
+
+        // KONTROL: Zaten takip ediyor mu?
+        if (hedefKullanici.takipciler.includes(aktifKullaniciId)) {
+            // --- TAKİBİ BIRAKMA İŞLEMİ (UNFOLLOW) ---
+            
+            // 1. Hedefin takipçilerinden seni çıkar
+            await hedefKullanici.updateOne({ $pull: { takipciler: aktifKullaniciId } });
+            
+            // 2. Senin takip ettiklerinden hedefi çıkar
+            await aktifKullanici.updateOne({ $pull: { takipEdilenler: hedefKullaniciId } });
+            
+            res.json({ durum: 'basarili', islem: 'takip_birakildi', mesaj: 'Takip bırakıldı' });
+
+        } else {
+            // --- TAKİP ETME İŞLEMİ (FOLLOW) ---
+            
+            // 1. Hedefin takipçilerine seni ekle
+            await hedefKullanici.updateOne({ $push: { takipciler: aktifKullaniciId } });
+            
+            // 2. Senin takip ettiklerine hedefi ekle
+            await aktifKullanici.updateOne({ $push: { takipEdilenler: hedefKullaniciId } });
+            
+            res.json({ durum: 'basarili', islem: 'takip_edildi', mesaj: 'Takip edildi' });
+        }
+
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
