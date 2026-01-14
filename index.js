@@ -151,22 +151,30 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
 });
 
 app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
-    // yazarId'yi de req.body'den alıyoruz
-    const { yazar, yazarId, kullaniciAdi, bolum, icerik, profilResim } = req.body; 
-    
-    // Cloudinary işlemleri vs...
-    
-    const yeniGonderi = new Gonderi({
-        yazarId, // <--- KAYDEDİYORUZ
-        yazar,
-        kullaniciAdi,
-        bolum,
-        icerik,
-        profilResim,
-        resimUrl: req.file ? req.file.path : null, // Varsa resim linki
-        tarih: tarihGetir()
-    });
-    // ...
+    try {
+        // Frontend'den gelen verileri al
+        const { yazar, yazarId, kullaniciAdi, bolum, icerik, profilResim } = req.body; 
+        
+        // Veritabanı objesini hazırla
+        const yeniGonderi = new Gonderi({
+            yazarId,
+            yazar,
+            kullaniciAdi,
+            bolum,
+            icerik,
+            profilResim,
+            resimUrl: req.file ? req.file.path : null, // Resim varsa ekle
+            tarih: tarihGetir()
+        });
+
+        // --- İŞTE EKSİK OLAN KISIMLAR ---
+        await yeniGonderi.save(); // 1. Veritabanına kaydet
+        res.json({ durum: 'basarili' }); // 2. Telefona "Tamam" de
+        
+    } catch (e) {
+        console.error("Gönderi Oluşturma Hatası:", e);
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
 });
 
 app.get('/api/akis', async (req, res) => { 
