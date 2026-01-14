@@ -158,8 +158,8 @@ app.post('/api/kayit-baslat', async (req, res) => {
 
         // 4. Mail Gönder
         await transporter.sendMail({
-            from: `"Kampüsüm101" <kampusum101info@gmail.com>`,
-            to: email,
+            from: 'Kampüsüm101 <kampusum101info@gmail.com>', // Açıkça belirtiyoruz
+            to: email, 
             subject: 'Doğrulama Kodunuz - Kampüsüm101',
             text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
         });
@@ -173,14 +173,10 @@ app.post('/api/kayit-baslat', async (req, res) => {
 });
 
 const transporter = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 2525,
-    secure: false, 
+    service: 'gmail', // Gmail için özel sihirli ayar (Host/Port gerektirmez)
     auth: {
-        // Render'daki "EMAIL_USER" değişkenini çekiyoruz
-        user: process.env.EMAIL_USER, 
-        // Render'daki "EMAIL_PASS" değişkenini çekiyoruz
-        pass: process.env.EMAIL_PASS  
+        user: process.env.EMAIL_USER, // Render'daki Gmail adresin
+        pass: process.env.EMAIL_PASS  // Render'daki 16 haneli Uygulama Şifresi
     }
 });
 
