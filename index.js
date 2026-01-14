@@ -225,6 +225,20 @@ app.get('/api/mesajlar/:uid1/:uid2', async (req, res) => {
     }).sort({ tarih: 1 });
     res.json(mesajlar);
 });
+
+app.delete('/api/mesaj-sil/:id', async (req, res) => {
+    try {
+        const mesajId = req.params.id;
+        
+        // Mesajı bul ve sil
+        await Mesaj.findByIdAndDelete(mesajId);
+        
+        res.json({ durum: 'basarili', mesaj: 'Mesaj silindi' });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', hata: e.message });
+    }
+});
+
 app.get('/ping', (req, res) => {
     res.send('Pong! Sunucu ayakta 🚀');
 });
