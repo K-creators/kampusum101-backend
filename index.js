@@ -88,51 +88,54 @@ const tarihGetir = () => {
 
 app.get('/', (req, res) => res.send('API Aktif'));
 
-// 1. KAYIT
+// AŞAMA 1: Kaydı Başlat (Güncellenmiş Mantık)
 app.post('/api/kayit-baslat', async (req, res) => {
     const { adSoyad, kullaniciAdi, email, sifre } = req.body;
 
     // EDU.TR KONTROLÜ
     if (!email.endsWith('.edu.tr')) {
-        return res.status(400).json({ durum: 'hata', mesaj: 'Sadece .edu.tr uzantılı öğrenci mailleri kabul edilmektedir!' });
+        return res.status(400).json({ durum: 'hata', mesaj: 'Sadece .edu.tr uzantılı mail adresleri kabul edilmektedir!' });
     }
-
-    // Zaten onaylı bir kullanıcı var mı?
-    const mevcutKullanici = await Kullanici.findOne({ email });
-    if (mevcutKullanici && mevcutKullanici.onaylandi) {
-        return res.status(400).json({ durum: 'hata', mesaj: 'Bu e-posta zaten kayıtlı ve onaylı.' });
-    }
-
-    const nickVar = await Kullanici.findOne({ kullaniciAdi });
-    if (nickVar) return res.status(400).json({ durum: 'hata', mesaj: 'Bu kullanıcı adı alınmış.' });
-
-    // 6 Haneli Rastgele Kod Üret
-    const kod = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
-        if (mevcutKullanici && !mevcutKullanici.onaylandi) {
-            // Kullanıcı var ama onaylamamışsa, bilgilerini güncelle ve yeni kod at
-            mevcutKullanici.adSoyad = adSoyad;
-            mevcutKullanici.kullaniciAdi = kullaniciAdi;
-            mevcutKullanici.sifre = sifre;
-            mevcutKullanici.onayKodu = kod;
-            await mevcutKullanici.save();
-        } else {
-            // Yepyeni kullanıcı oluştur (Onaysız)
-            const yeni = new Kullanici({ 
-                adSoyad, kullaniciAdi, email, sifre, 
-                onayKodu: kod, 
-                onaylandi: false,
-                bolum: "Öğrenci"
-            });
-            await yeni.save();
+        // 1. ONAYLI Kullanıcı Kontrolü (Gerçekten alınmış mı?)
+        // Hem maile hem kullanıcı adına bakıyoruz. Eğer ONAYLI biri varsa hata ver.
+        const onayliVar = await Kullanici.findOne({ 
+            $or: [{ email }, { kullaniciAdi }], 
+            onaylandi: true 
+        });
+
+        if (onayliVar) {
+            if (onayliVar.email === email) return res.status(400).json({ durum: 'hata', mesaj: 'Bu e-posta zaten kayıtlı ve onaylı.' });
+            if (onayliVar.kullaniciAdi === kullaniciAdi) return res.status(400).json({ durum: 'hata', mesaj: 'Bu kullanıcı adı zaten kullanımda.' });
         }
 
-        // Mail Gönder
+        // 2. ONAYSIZ (Çöp) Kayıtları Temizle
+        // Eğer aynı mail veya kullanıcı adıyla yarım kalmış bir kayıt varsa, onu silelim ki yenisini açabilelim.
+        await Kullanici.deleteMany({ 
+            $or: [{ email }, { kullaniciAdi }], 
+            onaylandi: false 
+        });
+
+        // 3. Yeni Kaydı Oluştur (Onaysız olarak)
+        const kod = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const yeni = new Kullanici({ 
+            adSoyad, 
+            kullaniciAdi, 
+            email, 
+            sifre, 
+            onayKodu: kod, 
+            onaylandi: false, // Henüz false
+            bolum: "Öğrenci"
+        });
+        
+        await yeni.save();
+
+        // 4. Mail Gönder
         await transporter.sendMail({
-            // Gönderen kısmına da ortam değişkenini koyuyoruz
-            from: `"Kampüsüm101" <${process.env.EMAIL_USER}>`, 
-            to: email, 
+            from: `"Kampüsüm101" <${process.env.EMAIL_USER}>`,
+            to: email,
             subject: 'Doğrulama Kodunuz - Kampüsüm101',
             text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
         });
@@ -140,8 +143,8 @@ app.post('/api/kayit-baslat', async (req, res) => {
         res.json({ durum: 'basarili', mesaj: 'Doğrulama kodu e-postana gönderildi.' });
 
     } catch (error) {
-        console.error("Mail Hatası:", error);
-        res.status(500).json({ durum: 'hata', mesaj: 'Kod gönderilemedi. Mail ayarlarını kontrol et.' });
+        console.error("Kayıt Hatası:", error);
+        res.status(500).json({ durum: 'hata', mesaj: 'Sunucu hatası: ' + error.message });
     }
 });
 
@@ -334,10 +337,5 @@ app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
     } catch (e) {
         res.status(500).json({ durum: 'hata' });
     }
-});
-app.get('/api/temizle/:kadi', async (req, res) => {
-    const silinen = await Kullanici.findOneAndDelete({ kullaniciAdi: req.params.kadi });
-    if (silinen) res.json({ mesaj: "Kullanıcı silindi!", veri: silinen });
-    else res.json({ mesaj: "Böyle bir kullanıcı bulunamadı." });
 });
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
