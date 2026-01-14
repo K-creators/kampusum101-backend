@@ -532,27 +532,31 @@ app.post('/api/dosya-yukle', upload.single('dosya'), (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
-// --- KULLANICI ARAMA ROTASI ---
-app.get('/api/kullanici-ara/:query', async (req, res) => {
+// --- KULLANICI ARAMA (GÜNCELLENMİŞ) ---
+app.get('/api/kullanici-ara', async (req, res) => {
     try {
-        const query = req.params.query;
-        
-        // Boş arama yapılırsa boş dizi dön
-        if (!query || query.trim() === "") {
-            return res.json([]);
+        const q = req.query.q || ""; // Arama metni (yoksa boş string)
+
+        let query = {};
+
+        // Eğer arama metni varsa filtre uygula
+        if (q.length > 0) {
+            query = {
+                $or: [
+                    { adSoyad: { $regex: q, $options: 'i' } },     // İsme göre (Büyük/küçük harf duyarsız)
+                    { kullaniciAdi: { $regex: q, $options: 'i' } } // Kullanıcı adına göre
+                ]
+            };
         }
 
-        // Regex ile arama (Büyük/küçük harf duyarsız 'i' flag'i)
-        // Hem Ad Soyad hem de Kullanıcı Adı içinde arar
-        const users = await Kullanici.find({
-            $or: [
-                { adSoyad: { $regex: query, $options: 'i' } },
-                { kullaniciAdi: { $regex: query, $options: 'i' } }
-            ]
-        }).select('adSoyad kullaniciAdi resimUrl bolum'); // Sadece gerekli alanları getir (Hız için)
+        // Arama boşsa herkesi getir, doluysa filtrele (Max 100 kişi getir ki telefon donmasın)
+        const users = await Kullanici.find(query)
+                                     .select('adSoyad kullaniciAdi resimUrl _id') // Sadece lazım olanları al
+                                     .limit(100); 
 
         res.json(users);
     } catch (e) {
+        console.log("Arama Hatası:", e);
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
