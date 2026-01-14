@@ -173,9 +173,9 @@ app.post('/api/kayit-baslat', async (req, res) => {
 });
 
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com", // Gmail'in gerçek adresi
-    port: 587,              // 587 Portu (Bulut sunucularda takılmaz)
-    secure: false,          // 587 kullanırken burası 'false' olmalı (TLS)
+    host: "smtp.gmail.com", 
+    port: 465,      // Gmail için SSL portu (587 çalışmazsa bu kullanılır)
+    secure: true,   // 465 portu için burası KESİNLİKLE 'true' olmalı
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
