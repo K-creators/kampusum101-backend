@@ -1,4 +1,5 @@
 require('dotenv').config();
+const nodemailer = require('nodemailer');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -29,6 +30,11 @@ const KullaniciSchema = new mongoose.Schema({
     resimUrl: String,
     takipciler: [String],
     takipEdilenler: [String],
+    
+    // YENİ EKLENENLER:
+    onayKodu: String, // 6 haneli kod
+    onaylandi: { type: Boolean, default: false }, // Hesap onaylı mı?
+    
     createdAt: { type: Date, default: Date.now }
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
@@ -83,25 +89,100 @@ const tarihGetir = () => {
 app.get('/', (req, res) => res.send('API Aktif'));
 
 // 1. KAYIT
-app.post('/api/kayit', async (req, res) => {
+app.post('/api/kayit-baslat', async (req, res) => {
     const { adSoyad, kullaniciAdi, email, sifre } = req.body;
-    const emailVar = await Kullanici.findOne({ email });
-    if (emailVar) return res.status(400).json({ durum: 'hata', mesaj: 'E-posta zaten kayıtlı!' });
-    const nickVar = await Kullanici.findOne({ kullaniciAdi });
-    if (nickVar) return res.status(400).json({ durum: 'hata', mesaj: 'Kullanıcı adı alınmış!' });
 
-    const yeniKullanici = new Kullanici({ 
-        adSoyad, kullaniciAdi, email, sifre, bolum: "Öğrenci", resimUrl: "" 
-    });
-    await yeniKullanici.save();
-    res.json({ durum: 'basarili', mesaj: 'Kayıt başarılı! Giriş yapabilirsiniz.' });
+    // EDU.TR KONTROLÜ
+    if (!email.endsWith('.edu.tr')) {
+        return res.status(400).json({ durum: 'hata', mesaj: 'Sadece .edu.tr uzantılı öğrenci mailleri kabul edilmektedir!' });
+    }
+
+    // Zaten onaylı bir kullanıcı var mı?
+    const mevcutKullanici = await Kullanici.findOne({ email });
+    if (mevcutKullanici && mevcutKullanici.onaylandi) {
+        return res.status(400).json({ durum: 'hata', mesaj: 'Bu e-posta zaten kayıtlı ve onaylı.' });
+    }
+
+    const nickVar = await Kullanici.findOne({ kullaniciAdi });
+    if (nickVar) return res.status(400).json({ durum: 'hata', mesaj: 'Bu kullanıcı adı alınmış.' });
+
+    // 6 Haneli Rastgele Kod Üret
+    const kod = Math.floor(100000 + Math.random() * 900000).toString();
+
+    try {
+        if (mevcutKullanici && !mevcutKullanici.onaylandi) {
+            // Kullanıcı var ama onaylamamışsa, bilgilerini güncelle ve yeni kod at
+            mevcutKullanici.adSoyad = adSoyad;
+            mevcutKullanici.kullaniciAdi = kullaniciAdi;
+            mevcutKullanici.sifre = sifre;
+            mevcutKullanici.onayKodu = kod;
+            await mevcutKullanici.save();
+        } else {
+            // Yepyeni kullanıcı oluştur (Onaysız)
+            const yeni = new Kullanici({ 
+                adSoyad, kullaniciAdi, email, sifre, 
+                onayKodu: kod, 
+                onaylandi: false,
+                bolum: "Öğrenci"
+            });
+            await yeni.save();
+        }
+
+        // Mail Gönder
+        await transporter.sendMail({
+            // Gönderen kısmına da ortam değişkenini koyuyoruz
+            from: `"Kampüsüm101" <${process.env.EMAIL_USER}>`, 
+            to: email, 
+            subject: 'Doğrulama Kodunuz - Kampüsüm101',
+            text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
+        });
+
+        res.json({ durum: 'basarili', mesaj: 'Doğrulama kodu e-postana gönderildi.' });
+
+    } catch (error) {
+        console.error("Mail Hatası:", error);
+        res.status(500).json({ durum: 'hata', mesaj: 'Kod gönderilemedi. Mail ayarlarını kontrol et.' });
+    }
+});
+
+const transporter = nodemailer.createTransport({
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false, 
+    auth: {
+        // Render'daki "EMAIL_USER" değişkenini çekiyoruz
+        user: process.env.EMAIL_USER, 
+        // Render'daki "EMAIL_PASS" değişkenini çekiyoruz
+        pass: process.env.EMAIL_PASS  
+    }
+});
+
+app.post('/api/kayit-tamamla', async (req, res) => {
+    const { email, kod } = req.body;
+    
+    const k = await Kullanici.findOne({ email });
+    
+    if (!k) return res.status(400).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı.' });
+    
+    if (k.onayKodu === kod) {
+        k.onaylandi = true;
+        k.onayKodu = ""; // Kodu temizle
+        await k.save();
+        res.json({ durum: 'basarili', mesaj: 'Hesap doğrulandı! Giriş yapabilirsiniz.' });
+    } else {
+        res.status(400).json({ durum: 'hata', mesaj: 'Hatalı doğrulama kodu!' });
+    }
 });
 
 // 2. GİRİŞ
 app.post('/api/giris', async (req, res) => {
     const { email, sifre } = req.body;
     const k = await Kullanici.findOne({ email, sifre });
-    if (k) res.json({ durum: 'basarili', kullanici: k });
+    
+    if (k) {
+        if (!k.onaylandi) return res.status(400).json({ durum: 'hata', mesaj: 'Lütfen önce mail adresinizi doğrulayın.' });
+        res.json({ durum: 'basarili', kullanici: k });
+    }
     else res.status(401).json({ durum: 'hata', mesaj: 'Hatalı bilgiler' });
 });
 
