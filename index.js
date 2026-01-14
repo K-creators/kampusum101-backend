@@ -338,4 +338,27 @@ app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
         res.status(500).json({ durum: 'hata' });
     }
 });
+app.get('/api/manuel-onayla/:email', async (req, res) => {
+    try {
+        const email = req.params.email;
+        
+        // Kullanıcıyı bul ve 'onaylandi' ayarını TRUE yap
+        const kullanici = await Kullanici.findOneAndUpdate(
+            { email: email },
+            { 
+                onaylandi: true, 
+                onayKodu: "" // Varsa eski kodu da temizleyelim
+            },
+            { new: true } // Güncel halini döndür
+        );
+
+        if (kullanici) {
+            res.json({ durum: 'basarili', mesaj: `Hesap (${kullanici.kullaniciAdi}) başarıyla onaylandı! Artık giriş yapabilirsin.` });
+        } else {
+            res.json({ durum: 'hata', mesaj: 'Bu mail adresiyle kullanıcı bulunamadı.' });
+        }
+    } catch (e) {
+        res.json({ durum: 'hata', mesaj: e.message });
+    }
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
