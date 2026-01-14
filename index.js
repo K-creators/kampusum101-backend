@@ -7,11 +7,41 @@ const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const mongoose = require('mongoose');
 const app = express();
+// --- FIREBASE ADMIN KURULUMU ---
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
+const SUPER_ADMIN_ID = "6962e30b6e6d834ae0fc9c8c";
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// --- YARDIMCI FONKSİYON: BİLDİRİM GÖNDER ---
+// Bu fonksiyonu hem otomatik hem manuel işlemlerde kullanacağız.
+async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
+    if (!hedefToken) return; // Token yoksa gönderme
+
+    const message = {
+        token: hedefToken,
+        notification: {
+            title: baslik,
+            body: icerik
+        },
+        data: data // Ekstra veri (örn: hangi sayfaya gideceği)
+    };
+
+    try {
+        await admin.messaging().send(message);
+        console.log("Bildirim gönderildi:", baslik);
+    } catch (error) {
+        console.log("Bildirim hatası:", error.message);
+    }
+}
 
 // MONGODB
 const MONGO_URI = "mongodb+srv://admin:kampusum123@cluster0.dzud8wf.mongodb.net/?appName=Cluster0";
@@ -30,7 +60,7 @@ const KullaniciSchema = new mongoose.Schema({
     resimUrl: String,
     takipciler: [String],
     takipEdilenler: [String],
-    
+    fcmToken: { type: String, default: "" },
     // YENİ EKLENENLER:
     onayKodu: String, // 6 haneli kod
     onaylandi: { type: Boolean, default: false }, // Hesap onaylı mı?
@@ -55,6 +85,16 @@ const KullaniciSchema = new mongoose.Schema({
     },
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
+
+app.post('/api/fcm-token-kaydet', async (req, res) => {
+    const { userId, token } = req.body;
+    try {
+        await Kullanici.findByIdAndUpdate(userId, { fcmToken: token });
+        res.json({ durum: 'basarili' });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata' });
+    }
+});
 
 const MesajSchema = new mongoose.Schema({
     gonderenId: String,
@@ -560,6 +600,14 @@ app.post('/api/kullanici-takip', async (req, res) => {
                 mesaj: 'seni takip etmeye başladı.'
             });
             await yeniBildirim.save();
+        if (hedefKullanici.fcmToken) {
+            await bildirimGonder(
+                hedefKullanici.fcmToken,           // Hedefin adresi
+                "Yeni Takipçin Var! 🎉",           // Başlık
+                `${aktifKullanici.adSoyad} seni takip etmeye başladı.`, // Mesaj
+                { type: 'profile', id: aktifKullaniciId } // Tıklayınca gideceği yer (Opsiyonel)
+            );
+        }
             res.json({ durum: 'basarili', islem: 'takip_edildi', mesaj: 'Takip edildi' });
             
         }
@@ -568,4 +616,46 @@ app.post('/api/kullanici-takip', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+app.post('/api/ozel-bildirim-gonder', async (req, res) => {
+    // GÜVENLİK KONTROLÜ
+    const { gonderenAdminId } = req.body; // Frontend'den bunu da göndereceğiz
+    if (gonderenAdminId !== SUPER_ADMIN_ID) {
+        return res.status(403).json({ durum: 'hata', mesaj: 'Yetkisiz işlem! Sen admin değilsin.' });
+    }
+    try {
+        // Hedef kullanıcıyı bul
+        const user = await Kullanici.findById(hedefUserId);
+        
+        if (user && user.fcmToken) {
+            await bildirimGonder(user.fcmToken, baslik, mesaj);
+            res.json({ durum: 'basarili', mesaj: 'Bildirim iletildi' });
+        } else {
+            res.json({ durum: 'hata', mesaj: 'Kullanıcının tokeni yok' });
+        }
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', hata: e.message });
+    }
+});
+// --- ADMIN: HERKESE BİLDİRİM GÖNDER (BROADCAST) ---
+app.post('/api/herkese-bildirim-gonder', async (req, res) => { 
+    const { gonderenAdminId } = req.body;
+        if (gonderenAdminId !== SUPER_ADMIN_ID) {
+            return res.status(403).json({ durum: 'hata', mesaj: 'Yetkisiz işlem! Sen admin değilsin.' });
+        }
+    const { baslik, mesaj } = req.body;    
+    try {
+        // Token'ı olan tüm kullanıcıları bul
+        const users = await Kullanici.find({ fcmToken: { $exists: true, $ne: "" } });
+
+        // Hepsine sırayla gönder
+        users.forEach(user => {
+            bildirimGonder(user.fcmToken, baslik, mesaj);
+        });
+
+        res.json({ durum: 'basarili', mesaj: `${users.length} kişiye gönderiliyor.` });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', hata: e.message });
+    }
+});
+
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
