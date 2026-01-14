@@ -239,6 +239,25 @@ app.delete('/api/mesaj-sil/:id', async (req, res) => {
     }
 });
 
+// --- TÜM SOHBETİ SİLME ROTASI ---
+app.delete('/api/sohbet-sil/:user1/:user2', async (req, res) => {
+    try {
+        const { user1, user2 } = req.params;
+
+        // İki kullanıcı arasındaki (Giden ve Gelen) TÜM mesajları sil
+        await Mesaj.deleteMany({
+            $or: [
+                { gonderenId: user1, aliciId: user2 },
+                { gonderenId: user2, aliciId: user1 }
+            ]
+        });
+
+        res.json({ durum: 'basarili', mesaj: 'Sohbet tamamen silindi' });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', hata: e.message });
+    }
+});
+
 app.get('/ping', (req, res) => {
     res.send('Pong! Sunucu ayakta 🚀');
 });
