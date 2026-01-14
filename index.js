@@ -158,7 +158,7 @@ app.post('/api/kayit-baslat', async (req, res) => {
 
         // 4. Mail Gönder
         await transporter.sendMail({
-            from: 'Kampüsüm101 <kampusum101info@gmail.com>', // Açıkça belirtiyoruz
+            from: 'Kampüsüm101 <kampusum101info@gmail.com>', // Brevo'da onaylı mailin
             to: email, 
             subject: 'Doğrulama Kodunuz - Kampüsüm101',
             text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
@@ -173,12 +173,12 @@ app.post('/api/kayit-baslat', async (req, res) => {
 });
 
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com", 
-    port: 465,      // Gmail için SSL portu (587 çalışmazsa bu kullanılır)
-    secure: true,   // 465 portu için burası KESİNLİKLE 'true' olmalı
+    host: "smtp-relay.brevo.com", // Brevo Sunucusu
+    port: 2525,                   // SİHİRLİ PORT (Render bunu engellemez)
+    secure: false,                // 2525 için false olmalı
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.EMAIL_USER, // Render'daki Brevo maili
+        pass: process.env.EMAIL_PASS  // Render'daki Brevo şifresi
     }
 });
 
