@@ -158,7 +158,7 @@ app.post('/api/kayit-baslat', async (req, res) => {
 
         // 4. Mail Gönder
         await transporter.sendMail({
-            from: 'Kampüsüm101 <kampusum101info@gmail.com>', // Brevo'da onaylı mailin
+            from: 'Kampüsüm101 <9fc1a4001@smtp-brevo.com>', // Brevo'da onaylı mailin
             to: email, 
             subject: 'Doğrulama Kodunuz - Kampüsüm101',
             text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
