@@ -269,6 +269,29 @@ const bildirimSchema = new mongoose.Schema({
 });
 const Bildirim = mongoose.model('Bildirim', bildirimSchema);
 
+// --- BİLDİRİMLERİ GETİR ---
+app.get('/api/bildirimler/:userId', async (req, res) => {
+    try {
+        // En yeniden en eskiye doğru sırala
+        const bildirimler = await Bildirim.find({ aliciId: req.params.userId }).sort({ tarih: -1 });
+        
+        // Her bildirim için gönderen kişinin detaylarını (resim, ad) bulup ekleyelim
+        // (Bunu Frontend'de tek tek yapmak yerine burada toplu yapıyoruz)
+        const detayliBildirimler = await Promise.all(bildirimler.map(async (b) => {
+            const gonderen = await Kullanici.findById(b.gonderenId).select('adSoyad resimUrl');
+            return {
+                ...b._doc,
+                gonderenAdi: gonderen ? gonderen.adSoyad : 'Bilinmeyen Kullanıcı',
+                gonderenResim: gonderen ? gonderen.resimUrl : null
+            };
+        }));
+
+        res.json(detayliBildirimler);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
 app.get('/ping', (req, res) => {
     res.send('Pong! Sunucu ayakta 🚀');
 });
