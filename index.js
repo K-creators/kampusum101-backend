@@ -335,4 +335,9 @@ app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
         res.status(500).json({ durum: 'hata' });
     }
 });
+app.get('/api/temizle/:kadi', async (req, res) => {
+    const silinen = await Kullanici.findOneAndDelete({ kullaniciAdi: req.params.kadi });
+    if (silinen) res.json({ mesaj: "Kullanıcı silindi!", veri: silinen });
+    else res.json({ mesaj: "Böyle bir kullanıcı bulunamadı." });
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
