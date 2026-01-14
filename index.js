@@ -163,7 +163,7 @@ app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
         bolum,
         icerik,
         profilResim,
-        resimUrl: result ? result.secure_url : null, // Varsa resim linki
+        resimUrl: req.file ? req.file.path : null, // Varsa resim linki
         tarih: tarihGetir()
     });
     // ...
