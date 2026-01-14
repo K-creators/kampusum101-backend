@@ -225,7 +225,9 @@ app.get('/api/mesajlar/:uid1/:uid2', async (req, res) => {
     }).sort({ tarih: 1 });
     res.json(mesajlar);
 });
-
+app.get('/ping', (req, res) => {
+    res.send('Pong! Sunucu ayakta 🚀');
+});
 // Sohbet Listesi
 app.get('/api/sohbet-gecmisi/:myId', async (req, res) => {
     const users = await Kullanici.find({ _id: { $ne: req.params.myId } });
