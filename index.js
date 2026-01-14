@@ -35,7 +35,16 @@ const KullaniciSchema = new mongoose.Schema({
     onayKodu: String, // 6 haneli kod
     onaylandi: { type: Boolean, default: false }, // Hesap onaylı mı?
     
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    sonKullaniciAdiDegisikligi: { type: Date, default: null }, // Tarih kontrolü için
+    ozgecmis: {
+        hakkinda: { type: String, default: "" },
+        okul: { type: String, default: "" },
+        bolum: { type: String, default: "" },
+        isTecrubesi: { type: String, default: "" }, // Basit metin olarak tutalım şimdilik
+        yetenekler: { type: String, default: "" },
+        linkler: { type: String, default: "" } // LinkedIn, Github vs.
+    },
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
 
@@ -91,7 +100,14 @@ app.get('/', (req, res) => res.send('API Aktif'));
 // AŞAMA 1: Kaydı Başlat (Güncellenmiş Mantık)
 app.post('/api/kayit-baslat', async (req, res) => {
     const { adSoyad, kullaniciAdi, email, sifre } = req.body;
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
 
+    if (!usernameRegex.test(kullaniciAdi)) {
+        return res.status(400).json({ 
+            durum: 'hata', 
+            mesaj: 'Kullanıcı adı 3-20 karakter olmalı ve sadece harf, rakam veya _ içermelidir.' 
+        });
+    }
     // EDU.TR KONTROLÜ
     if (!email.endsWith('.edu.tr')) {
         return res.status(400).json({ durum: 'hata', mesaj: 'Sadece .edu.tr uzantılı mail adresleri kabul edilmektedir!' });
@@ -225,13 +241,63 @@ app.post('/api/sifre-degistir', async (req, res) => {
 
 // 5. PROFİL & GÖNDERİ İŞLEMLERİ
 app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => { 
-    const { id, adSoyad, kullaniciAdi, bolum, bio } = req.body;
-    const resimUrl = req.file ? req.file.path : undefined;
-    const guncelVeri = { adSoyad, kullaniciAdi, bolum, bio };
-    if (resimUrl) guncelVeri.resimUrl = resimUrl;
+    const { id, adSoyad, kullaniciAdi, bolum, bio, ozgecmis } = req.body;
     
-    const yeniProfil = await Kullanici.findByIdAndUpdate(id, guncelVeri, { new: true });
-    res.json({ durum: 'basarili', yeniProfil });
+    try {
+        const user = await Kullanici.findById(id);
+        if (!user) return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı' });
+
+        // KULLANICI ADI DEĞİŞİKLİĞİ KONTROLÜ
+        if (kullaniciAdi && kullaniciAdi !== user.kullaniciAdi) {
+            // 1. Format Kontrolü
+            const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+            if (!usernameRegex.test(kullaniciAdi)) {
+                return res.status(400).json({ durum: 'hata', mesaj: 'Geçersiz kullanıcı adı formatı!' });
+            }
+
+            // 2. Benzersizlik Kontrolü
+            const varMi = await Kullanici.findOne({ kullaniciAdi });
+            if (varMi) return res.status(400).json({ durum: 'hata', mesaj: 'Bu kullanıcı adı zaten alınmış.' });
+
+            // 3. Zaman Kontrolü (7 Gün)
+            const bugun = new Date();
+            if (user.sonKullaniciAdiDegisikligi) {
+                const gecenSure = bugun - new Date(user.sonKullaniciAdiDegisikligi);
+                const yediGunMs = 7 * 24 * 60 * 60 * 1000;
+                
+                if (gecenSure < yediGunMs) {
+                    const kalanGun = Math.ceil((yediGunMs - gecenSure) / (24 * 60 * 60 * 1000));
+                    return res.status(400).json({ durum: 'hata', mesaj: `Kullanıcı adını değiştirmek için ${kalanGun} gün daha beklemelisin.` });
+                }
+            }
+            
+            // Onaylanırsa güncelle ve tarihi kaydet
+            user.kullaniciAdi = kullaniciAdi;
+            user.sonKullaniciAdiDegisikligi = bugun;
+        }
+
+        // Diğer Bilgiler
+        if (adSoyad) user.adSoyad = adSoyad;
+        if (bolum) user.bolum = bolum;
+        if (bio) user.bio = bio;
+        if (req.file) user.resimUrl = req.file.path;
+
+        // CV Güncelleme (JSON string olarak gelirse parse et, obje gelirse direkt al)
+        if (ozgecmis) {
+            let cvData = ozgecmis;
+            if (typeof ozgecmis === 'string') {
+                try { cvData = JSON.parse(ozgecmis); } catch(e) {}
+            }
+            user.ozgecmis = { ...user.ozgecmis, ...cvData };
+        }
+
+        await user.save();
+        res.json({ durum: 'basarili', yeniProfil: user });
+
+    } catch (e) {
+        console.log(e);
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
 });
 
 app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
