@@ -134,7 +134,7 @@ app.post('/api/kayit-baslat', async (req, res) => {
 
         // 4. Mail Gönder
         await transporter.sendMail({
-            from: `"Kampüsüm101" <${process.env.EMAIL_USER}>`,
+            from: `"Kampüsüm101" <kampusum101info@gmail.com>`,
             to: email,
             subject: 'Doğrulama Kodunuz - Kampüsüm101',
             text: `Merhaba ${adSoyad}, Kampüsüm101'e hoş geldin! Doğrulama kodun: ${kod}`
