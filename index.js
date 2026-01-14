@@ -43,7 +43,15 @@ const KullaniciSchema = new mongoose.Schema({
         bolum: { type: String, default: "" },
         isTecrubesi: { type: String, default: "" }, // Basit metin olarak tutalım şimdilik
         yetenekler: { type: String, default: "" },
-        linkler: { type: String, default: "" } // LinkedIn, Github vs.
+        linkler: { type: String, default: "" } ,// LinkedIn, Github vs.
+        sertifikalar: [{ 
+            baslik: String, 
+            dosyaUrl: String // İsteğe bağlı
+        }],
+        projeler: [{ 
+            baslik: String, 
+            dosyaUrl: String // İsteğe bağlı
+        }]
     },
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
@@ -84,7 +92,7 @@ cloudinary.config({
 });
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: { folder: 'kampusum101_uploads', allowed_formats: ['jpg', 'png', 'jpeg', 'heic'] },
+    params: { folder: 'kampusum101_uploads', allowed_formats: ['jpg', 'png', 'jpeg', 'heic','pdf'] },
 });
 const upload = multer({ storage: storage });
 
@@ -402,6 +410,15 @@ app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
         res.json({ durum: 'basarili' });
     } catch (e) {
         res.status(500).json({ durum: 'hata' });
+    }
+});
+// TEKİL DOSYA YÜKLEME ROTASI (Sertifika/Proje için)
+app.post('/api/dosya-yukle', upload.single('dosya'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ durum: 'hata', mesaj: 'Dosya seçilmedi' });
+        res.json({ durum: 'basarili', url: req.file.path });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
 app.listen(port, () => console.log(`Sunucu ${port} portunda!`));
