@@ -173,10 +173,12 @@ app.post('/api/kayit-baslat', async (req, res) => {
 });
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Gmail için özel sihirli ayar (Host/Port gerektirmez)
+    host: "smtp.gmail.com", // Gmail'in gerçek adresi
+    port: 587,              // 587 Portu (Bulut sunucularda takılmaz)
+    secure: false,          // 587 kullanırken burası 'false' olmalı (TLS)
     auth: {
-        user: process.env.EMAIL_USER, // Render'daki Gmail adresin
-        pass: process.env.EMAIL_PASS  // Render'daki 16 haneli Uygulama Şifresi
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 });
 
