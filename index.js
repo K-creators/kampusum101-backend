@@ -258,6 +258,17 @@ app.delete('/api/sohbet-sil/:user1/:user2', async (req, res) => {
     }
 });
 
+// --- BİLDİRİM ŞEMASI ---
+const bildirimSchema = new mongoose.Schema({
+    aliciId: String,      // Bildirimi görecek kişi
+    gonderenId: String,   // Bildirimi tetikleyen kişi (Takip eden vb.)
+    tur: String,          // 'takip', 'mesaj', 'begeni'
+    mesaj: String,        // "Seni takip etti" vb.
+    okundu: { type: Boolean, default: false },
+    tarih: { type: Date, default: Date.now }
+});
+const Bildirim = mongoose.model('Bildirim', bildirimSchema);
+
 app.get('/ping', (req, res) => {
     res.send('Pong! Sunucu ayakta 🚀');
 });
