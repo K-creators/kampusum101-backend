@@ -234,6 +234,68 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+// --- HESAP SİLME 1. AŞAMA: Şifre Kontrolü ve Kod Gönderme ---
+app.post('/api/hesap-sil-baslat', async (req, res) => {
+    const { userId, sifre } = req.body;
+
+    try {
+        const user = await Kullanici.findById(userId);
+        if (!user) return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı.' });
+
+        // 1. Şifre Kontrolü (Düz metin sakladığımız varsayımıyla)
+        if (user.sifre !== sifre) {
+            return res.status(400).json({ durum: 'hata', mesaj: 'Girdiğiniz şifre yanlış!' });
+        }
+
+        // 2. Doğrulama Kodu Oluştur (6 Haneli)
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        user.dogrulamaKodu = code; // Kodu veritabanına kaydet
+        await user.save();
+
+        // 3. E-posta Gönder
+        const mailOptions = {
+            from: 'kampusum101info@gmail.com', // Senin mailin
+            to: user.email,
+            subject: 'Kampüsüm101 - Hesap Silme Onay Kodu',
+            text: `Hesabınızı silmek için talepte bulundunuz.\n\nOnay Kodunuz: ${code}\n\nEğer bu işlemi siz yapmadıysanız lütfen şifrenizi değiştirin.`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.log(error);
+                return res.status(500).json({ durum: 'hata', mesaj: 'Kod gönderilemedi.' });
+            }
+            res.json({ durum: 'basarili', mesaj: 'Doğrulama kodu e-posta adresinize gönderildi.' });
+        });
+
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+// --- HESAP SİLME 2. AŞAMA: Kodu Doğrula ve SİL ---
+app.post('/api/hesap-sil-onayla', async (req, res) => {
+    const { userId, kod } = req.body;
+
+    try {
+        const user = await Kullanici.findById(userId);
+        if (!user) return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı.' });
+
+        // Kod Kontrolü
+        if (user.dogrulamaKodu !== kod) {
+            return res.status(400).json({ durum: 'hata', mesaj: 'Hatalı kod girdiniz!' });
+        }
+
+        // Kodu temizle ve HESABI SİL
+        // (İsteğe bağlı: Gönderilerini de silebilirsin ama şimdilik sadece üyeliği siliyoruz)
+        await Kullanici.findByIdAndDelete(userId);
+
+        res.json({ durum: 'basarili', mesaj: 'Hesabınız kalıcı olarak silindi. Üzgünüz, sizi özleyeceğiz.' });
+
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
 app.post('/api/kayit-tamamla', async (req, res) => {
     const { email, kod } = req.body;
     
