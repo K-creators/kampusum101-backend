@@ -132,8 +132,10 @@ const GonderiSchema = new mongoose.Schema({
         icerik: String,
         profilResim: String,
         tarih: String
-    }]
-});
+    }],
+    pdfUrl: { type: String, default: "" },   // PDF dosya yolu
+    pdfIsim: { type: String, default: "" },  // PDF'in orijinal adı (tez.pdf gibi)
+    }, { timestamps: true });
 const Gonderi = mongoose.model('Gonderi', GonderiSchema);
 
 // CLOUDINARY
@@ -517,6 +519,42 @@ app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
     } catch (e) {
         console.error("Gönderi Oluşturma Hatası:", e);
         res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+    // API İÇERİĞİ:
+    try {
+        const { yazarId, yazar, kullaniciAdi, bolum, icerik } = req.body;
+        let resimUrl = "";
+        let pdfUrl = "";
+        let pdfIsim = "";
+
+        // Eğer Resim geldiyse
+        if (req.files['resim']) {
+            resimUrl = "uploads/" + req.files['resim'][0].filename;
+        }
+
+        // Eğer PDF (Belge) geldiyse
+        if (req.files['belge']) {
+            pdfUrl = "uploads/" + req.files['belge'][0].filename;
+            // Dosyanın orijinal ismini al (Flutter'dan göndereceğiz veya multer'dan alacağız)
+            // Basitlik olsun diye dosya adını kullanabiliriz
+            pdfIsim = req.files['belge'][0].originalname; 
+        }
+
+        const yeniGonderi = new Gonderi({
+            userId: yazarId,
+            adSoyad: yazar,
+            kullaniciAdi,
+            bolum,
+            icerik,
+            resimUrl,
+            pdfUrl, // Yeni alan
+            pdfIsim // Yeni alan
+        });
+
+        await yeniGonderi.save();
+        res.status(201).json(yeniGonderi);
+    } catch (err) {
+        res.status(500).json({ mesaj: err.message });
     }
 });
 
