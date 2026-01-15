@@ -495,7 +495,10 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     }
 });
 
-app.post('/api/gonderi-olustur', upload.single('resim'), async (req, res) => {
+app.post('/api/gonderi-olustur',upload.fields([
+    { name: 'resim', maxCount: 1 }, 
+    { name: 'belge', maxCount: 1 }
+                                ]), async (req, res) => {
     try {
         // Frontend'den gelen verileri al
         const { yazar, yazarId, kullaniciAdi, bolum, icerik, profilResim } = req.body; 
