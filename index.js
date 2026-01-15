@@ -96,6 +96,18 @@ app.post('/api/fcm-token-kaydet', async (req, res) => {
     }
 });
 
+// --- BİLDİRİM KAPATMA (TOKEN SİLME) ---
+app.post('/api/fcm-token-sil', async (req, res) => {
+    const { userId } = req.body;
+    try {
+        // Token alanını boşaltıyoruz
+        await Kullanici.findByIdAndUpdate(userId, { fcmToken: "" });
+        res.json({ durum: 'basarili', mesaj: 'Bildirimler kapatıldı.' });
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
 const MesajSchema = new mongoose.Schema({
     gonderenId: String,
     aliciId: String,
@@ -618,26 +630,6 @@ app.post('/api/kullanici-takip', async (req, res) => {
 
     } catch (e) {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
-    }
-});
-app.post('/api/ozel-bildirim-gonder', async (req, res) => {
-    // GÜVENLİK KONTROLÜ
-    const { gonderenAdminId } = req.body; // Frontend'den bunu da göndereceğiz
-    if (gonderenAdminId !== SUPER_ADMIN_ID) {
-        return res.status(403).json({ durum: 'hata', mesaj: 'Yetkisiz işlem! Sen admin değilsin.' });
-    }
-    try {
-        // Hedef kullanıcıyı bul
-        const user = await Kullanici.findById(hedefUserId);
-        
-        if (user && user.fcmToken) {
-            await bildirimGonder(user.fcmToken, baslik, mesaj);
-            res.json({ durum: 'basarili', mesaj: 'Bildirim iletildi' });
-        } else {
-            res.json({ durum: 'hata', mesaj: 'Kullanıcının tokeni yok' });
-        }
-    } catch (e) {
-        res.status(500).json({ durum: 'hata', hata: e.message });
     }
 });
 // --- ADMIN: HERKESE BİLDİRİM GÖNDER (BROADCAST) ---
