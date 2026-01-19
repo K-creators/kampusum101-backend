@@ -60,6 +60,7 @@ const KullaniciSchema = new mongoose.Schema({
     resimUrl: String,
     takipciler: [String],
     takipEdilenler: [String],
+    engellenenler: [String],
     fcmToken: { type: String, default: "" },
     onayKodu: String,
     onaylandi: { type: Boolean, default: false },
@@ -78,6 +79,50 @@ const KullaniciSchema = new mongoose.Schema({
     },
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
+
+// --- ŞİKAYET / RAPOR ŞEMASI ---
+const RaporSchema = new mongoose.Schema({
+    sikayetEdenId: String,
+    sikayetEdilenId: String, // Kullanıcı veya Gönderi ID'si
+    tur: { type: String, enum: ['gonderi', 'kullanici', 'yorum'], default: 'gonderi' },
+    sebep: String,
+    aciklama: { type: String, default: "" },
+    tarih: { type: Date, default: Date.now },
+    durum: { type: String, default: 'bekliyor' } // bekliyor, incelendi, silindi
+});
+const Rapor = mongoose.model('Rapor', RaporSchema);
+
+// --- İÇERİK ŞİKAYET ETME ROTASI ---
+app.post('/api/sikayet-et', async (req, res) => {
+    const { sikayetEdenId, sikayetEdilenId, tur, sebep, aciklama } = req.body;
+
+    try {
+        // Aynı kişi aynı içeriği daha önce şikayet etmiş mi?
+        const varMi = await Rapor.findOne({ sikayetEdenId, sikayetEdilenId, tur });
+        
+        if (varMi) {
+            return res.status(400).json({ durum: 'hata', mesaj: 'Bunu zaten şikayet ettiniz.' });
+        }
+
+        const yeniRapor = new Rapor({
+            sikayetEdenId,
+            sikayetEdilenId,
+            tur,
+            sebep,
+            aciklama
+        });
+
+        await yeniRapor.save();
+
+        // Admin'e bildirim gönderme (Opsiyonel)
+        // Burada SUPER_ADMIN_ID'ye bildirim atabilirsin.
+
+        res.json({ durum: 'basarili', mesaj: 'Bildiriminiz alındı. Teşekkürler.' });
+
+    } catch (error) {
+        res.status(500).json({ durum: 'hata', mesaj: error.message });
+    }
+});
 
 // Token İşlemleri
 app.post('/api/fcm-token-kaydet', async (req, res) => {
@@ -707,6 +752,69 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
         console.error("Şifre sıfırlama hatası:", error);
         // Hata durumunda HTML değil JSON dönüyoruz ki uygulama çökmesin.
         res.status(500).json({ durum: 'hata', mesaj: "Sunucu hatası: " + error.message });
+    }
+});
+
+// --- ŞİFRE YENİLEME (2. AŞAMA: KODU GİR VE DEĞİŞTİR) ---
+app.post('/api/sifre-yenile', async (req, res) => {
+    const { email, kod, yeniSifre } = req.body;
+
+    try {
+        // 1. Kullanıcıyı bul
+        const user = await Kullanici.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı.' });
+        }
+
+        // 2. Kodu Kontrol Et (Önceki adımda 'onayKodu'na kaydetmiştik)
+        // NOT: Kodlar string olduğu için === kullanıyoruz, trim() boşlukları temizler.
+        if (!user.onayKodu || user.onayKodu.trim() !== kod.trim()) {
+            return res.status(400).json({ durum: 'hata', mesaj: 'Girdiğiniz kod hatalı veya süresi dolmuş!' });
+        }
+
+        // 3. Şifreyi Güncelle
+        user.sifre = yeniSifre;
+        
+        // 4. Kodu sil (Güvenlik için, tekrar kullanılamasın)
+        user.onayKodu = ""; 
+        
+        await user.save();
+
+        res.json({ durum: 'basarili', mesaj: 'Şifreniz başarıyla güncellendi. Giriş yapabilirsiniz.' });
+
+    } catch (error) {
+        console.error("Şifre yenileme hatası:", error);
+        res.status(500).json({ durum: 'hata', mesaj: 'Sunucu hatası: ' + error.message });
+    }
+});
+// --- KULLANICI ENGELLEME ROTASI ---
+app.post('/api/kullanici-engelle', async (req, res) => {
+    const { aktifKullaniciId, hedefKullaniciId } = req.body;
+
+    try {
+        const aktifKullanici = await Kullanici.findById(aktifKullaniciId);
+        
+        if (!aktifKullanici) return res.status(404).json({ durum: 'hata' });
+
+        if (aktifKullanici.engellenenler.includes(hedefKullaniciId)) {
+            // Zaten engelli, engeli kaldır
+            await aktifKullanici.updateOne({ $pull: { engellenenler: hedefKullaniciId } });
+            res.json({ durum: 'basarili', mesaj: 'Engel kaldırıldı.' });
+        } else {
+            // Engelle
+            await aktifKullanici.updateOne({ $push: { engellenenler: hedefKullaniciId } });
+            
+            // Varsa takipleşmeyi de bitir
+            await aktifKullanici.updateOne({ $pull: { takipciler: hedefKullaniciId, takipEdilenler: hedefKullaniciId } });
+            await Kullanici.findByIdAndUpdate(hedefKullaniciId, { 
+                $pull: { takipciler: aktifKullaniciId, takipEdilenler: aktifKullaniciId } 
+            });
+
+            res.json({ durum: 'basarili', mesaj: 'Kullanıcı engellendi.' });
+        }
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
 
