@@ -310,6 +310,43 @@ app.post('/api/giris', async (req, res) => {
     else res.status(401).json({ durum: 'hata', mesaj: 'Hatalı bilgiler' });
 });
 
+// --- ŞİFRE SIFIRLAMA (KOD GÖNDERME) ROTASI ---
+app.post('/api/sifre-sifirla-istek', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        // DÜZELTME 1: 'User' yerine senin tanımladığın 'Kullanici' modelini kullanıyoruz.
+        const user = await Kullanici.findOne({ email });
+        
+        if (!user) {
+            // DÜZELTME 2: 'success' yerine 'durum' formatı kullanıyoruz (App standardı).
+            return res.status(404).json({ durum: 'hata', mesaj: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
+        }
+
+        // Rastgele 6 haneli kod üret
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // DÜZELTME 3: Şemanda 'resetCode' yok. Var olan 'onayKodu' alanını kullanıyoruz.
+        user.onayKodu = verificationCode;
+        await user.save();
+
+        // DÜZELTME 4: 'sendEmail' fonksiyonun yoktu. Mevcut 'transporter'ı kullanıyoruz.
+        await transporter.sendMail({
+            from: 'Kampüsüm101 <karakus.job@outlook.com>', // Burayı kendi mailinle güncelle
+            to: email,
+            subject: 'Şifre Sıfırlama Kodu - Kampüsüm101',
+            text: `Merhaba ${user.adSoyad},\n\nŞifreni sıfırlamak için doğrulama kodun: ${verificationCode}\n\nBu işlemi sen yapmadıysan bu maili dikkate alma.`
+        });
+
+        res.json({ durum: 'basarili', mesaj: "Doğrulama kodu e-posta adresinize gönderildi." });
+
+    } catch (error) {
+        console.error("Şifre sıfırlama hatası:", error);
+        // Hata durumunda HTML değil JSON dönüyoruz ki uygulama çökmesin.
+        res.status(500).json({ durum: 'hata', mesaj: "Sunucu hatası: " + error.message });
+    }
+});
+
 // 3. MESAJLAŞMA
 app.post('/api/mesaj-gonder', async (req, res) => {
     const { gonderenId, aliciId, icerik } = req.body;
@@ -670,43 +707,6 @@ app.post('/api/herkese-bildirim-gonder', async (req, res) => {
         res.json({ durum: 'basarili', mesaj: `${users.length} kişiye gönderiliyor.` });
     } catch (e) {
         res.status(500).json({ durum: 'hata', hata: e.message });
-    }
-});
-
-// --- ŞİFRE SIFIRLAMA (KOD GÖNDERME) ROTASI ---
-app.post('/api/sifre-sifirla-istek', async (req, res) => {
-    try {
-        const { email } = req.body;
-        
-        // DÜZELTME 1: 'User' yerine senin tanımladığın 'Kullanici' modelini kullanıyoruz.
-        const user = await Kullanici.findOne({ email });
-        
-        if (!user) {
-            // DÜZELTME 2: 'success' yerine 'durum' formatı kullanıyoruz (App standardı).
-            return res.status(404).json({ durum: 'hata', mesaj: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
-        }
-
-        // Rastgele 6 haneli kod üret
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // DÜZELTME 3: Şemanda 'resetCode' yok. Var olan 'onayKodu' alanını kullanıyoruz.
-        user.onayKodu = verificationCode;
-        await user.save();
-
-        // DÜZELTME 4: 'sendEmail' fonksiyonun yoktu. Mevcut 'transporter'ı kullanıyoruz.
-        await transporter.sendMail({
-            from: 'Kampüsüm101 <karakus.job@outlook.com>', // Burayı kendi mailinle güncelle
-            to: email,
-            subject: 'Şifre Sıfırlama Kodu - Kampüsüm101',
-            text: `Merhaba ${user.adSoyad},\n\nŞifreni sıfırlamak için doğrulama kodun: ${verificationCode}\n\nBu işlemi sen yapmadıysan bu maili dikkate alma.`
-        });
-
-        res.json({ durum: 'basarili', mesaj: "Doğrulama kodu e-posta adresinize gönderildi." });
-
-    } catch (error) {
-        console.error("Şifre sıfırlama hatası:", error);
-        // Hata durumunda HTML değil JSON dönüyoruz ki uygulama çökmesin.
-        res.status(500).json({ durum: 'hata', mesaj: "Sunucu hatası: " + error.message });
     }
 });
 
