@@ -138,7 +138,11 @@ cloudinary.config({
 });
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: { folder: 'kampusum101_uploads', allowed_formats: ['jpg', 'png', 'jpeg', 'heic', 'pdf'] },
+    params: { 
+        folder: 'kampusum101_uploads', 
+        resource_type: 'auto', // <--- KRİTİK EKLEME: Cloudinary'nin dosya türünü (PDF/Resim) otomatik anlamasını sağlar
+        allowed_formats: ['jpg', 'png', 'jpeg', 'heic', 'pdf'] 
+    },
 });
 const upload = multer({ storage: storage });
 
@@ -666,6 +670,36 @@ app.post('/api/herkese-bildirim-gonder', async (req, res) => {
         res.json({ durum: 'basarili', mesaj: `${users.length} kişiye gönderiliyor.` });
     } catch (e) {
         res.status(500).json({ durum: 'hata', hata: e.message });
+    }
+});
+
+// Şifremi Unuttum (Kod Gönderme) Rotası
+app.post('/api/sifre-sifirla-istek', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        // 1. Kullanıcı var mı kontrol et
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
+        }
+
+        // 2. Rastgele 6 haneli kod üret
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // 3. Kodu veritabanına kaydet (Geçici olarak user objesine ekliyoruz)
+        user.resetCode = verificationCode;
+        await user.save();
+
+        // 4. E-postayı gönder (Nodemailer gerekli)
+        // NOT: Aşağıdaki fonksiyonu kendi mail ayarlarına göre düzenlemelisin
+        await sendEmail(email, "Şifre Sıfırlama Kodu", `Doğrulama Kodunuz: ${verificationCode}`);
+
+        res.json({ success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." });
+
+    } catch (error) {
+        console.error("Şifre sıfırlama hatası:", error);
+        res.status(500).json({ success: false, message: "Sunucu hatası oluştu." });
     }
 });
 
