@@ -673,33 +673,40 @@ app.post('/api/herkese-bildirim-gonder', async (req, res) => {
     }
 });
 
-// Şifremi Unuttum (Kod Gönderme) Rotası
+// --- ŞİFRE SIFIRLAMA (KOD GÖNDERME) ROTASI ---
 app.post('/api/sifre-sifirla-istek', async (req, res) => {
     try {
         const { email } = req.body;
         
-        // 1. Kullanıcı var mı kontrol et
-        const user = await User.findOne({ email });
+        // DÜZELTME 1: 'User' yerine senin tanımladığın 'Kullanici' modelini kullanıyoruz.
+        const user = await Kullanici.findOne({ email });
+        
         if (!user) {
-            return res.status(404).json({ success: false, message: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
+            // DÜZELTME 2: 'success' yerine 'durum' formatı kullanıyoruz (App standardı).
+            return res.status(404).json({ durum: 'hata', mesaj: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
         }
 
-        // 2. Rastgele 6 haneli kod üret
+        // Rastgele 6 haneli kod üret
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 3. Kodu veritabanına kaydet (Geçici olarak user objesine ekliyoruz)
-        user.resetCode = verificationCode;
+        // DÜZELTME 3: Şemanda 'resetCode' yok. Var olan 'onayKodu' alanını kullanıyoruz.
+        user.onayKodu = verificationCode;
         await user.save();
 
-        // 4. E-postayı gönder (Nodemailer gerekli)
-        // NOT: Aşağıdaki fonksiyonu kendi mail ayarlarına göre düzenlemelisin
-        await sendEmail(email, "Şifre Sıfırlama Kodu", `Doğrulama Kodunuz: ${verificationCode}`);
+        // DÜZELTME 4: 'sendEmail' fonksiyonun yoktu. Mevcut 'transporter'ı kullanıyoruz.
+        await transporter.sendMail({
+            from: 'Kampüsüm101 <karakus.job@outlook.com>', // Burayı kendi mailinle güncelle
+            to: email,
+            subject: 'Şifre Sıfırlama Kodu - Kampüsüm101',
+            text: `Merhaba ${user.adSoyad},\n\nŞifreni sıfırlamak için doğrulama kodun: ${verificationCode}\n\nBu işlemi sen yapmadıysan bu maili dikkate alma.`
+        });
 
-        res.json({ success: true, message: "Doğrulama kodu e-posta adresinize gönderildi." });
+        res.json({ durum: 'basarili', mesaj: "Doğrulama kodu e-posta adresinize gönderildi." });
 
     } catch (error) {
         console.error("Şifre sıfırlama hatası:", error);
-        res.status(500).json({ success: false, message: "Sunucu hatası oluştu." });
+        // Hata durumunda HTML değil JSON dönüyoruz ki uygulama çökmesin.
+        res.status(500).json({ durum: 'hata', mesaj: "Sunucu hatası: " + error.message });
     }
 });
 
