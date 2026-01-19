@@ -833,4 +833,32 @@ app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+// --- MESAJLAŞILAN KİŞİLERİ LİSTELE ---
+app.get('/api/sohbet-listesi/:userId', async (req, res) => {
+    try {
+        const myId = req.params.userId;
+
+        // 1. Benim dahil olduğum tüm mesajları bul
+        const mesajlar = await Mesaj.find({
+            $or: [{ gonderenId: myId }, { aliciId: myId }]
+        }).sort({ tarih: -1 }); // En yeniden eskiye
+
+        // 2. Mesajlaştığım kişilerin ID'lerini (Tekrar etmeden) topla
+        const konusulanIdler = new Set();
+        mesajlar.forEach(m => {
+            if (m.gonderenId !== myId) konusulanIdler.add(m.gonderenId);
+            if (m.aliciId !== myId) konusulanIdler.add(m.aliciId);
+        });
+
+        // 3. Bu ID'lerin detaylarını Kullanıcı tablosundan çek
+        const kullanicilar = await Kullanici.find({
+            '_id': { $in: Array.from(konusulanIdler) }
+        }).select('adSoyad kullaniciAdi resimUrl');
+
+        res.json(kullanicilar);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
 app.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
