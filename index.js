@@ -817,5 +817,20 @@ app.post('/api/kullanici-engelle', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+// index.js -> En alta ekle
+app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
+    try {
+        const user = await Kullanici.findById(req.params.userId);
+        if (!user) return res.json([]);
+        
+        // Engellenen ID'leri kullanarak o kullanıcıların detaylarını bul
+        const engellenenKullanicilar = await Kullanici.find({
+            '_id': { $in: user.engellenenler }
+        }).select('adSoyad kullaniciAdi resimUrl'); // Sadece gerekli alanlar
 
+        res.json(engellenenKullanicilar);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
 app.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
