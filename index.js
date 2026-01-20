@@ -32,6 +32,16 @@ async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
             title: baslik,
             body: icerik
         },
+        // --- BU KISIM EKLENDİ (SES İÇİN ÖNEMLİ) ---
+        android: {
+            notification: {
+                sound: 'default',
+                channelId: 'high_importance_channel', // main.dart ve manifest ile aynı olmalı
+                priority: 'high',
+                visibility: 'public',
+            }
+        },
+        // ------------------------------------------
         data: data
     };
 
