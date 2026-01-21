@@ -365,11 +365,34 @@ app.post('/api/giris', async (req, res) => {
     else res.status(401).json({ durum: 'hata', mesaj: 'Hatalı bilgiler' });
 });
 
-// 3. MESAJLAŞMA
+// 3. MESAJLAŞMA (GÜNCELLENDİ: BİLDİRİMLİ)
 app.post('/api/mesaj-gonder', async (req, res) => {
     const { gonderenId, aliciId, icerik } = req.body;
-    await new Mesaj({ gonderenId, aliciId, icerik }).save();
-    res.json({ durum: 'basarili' });
+    
+    try {
+        // 1. Mesajı Kaydet
+        await new Mesaj({ gonderenId, aliciId, icerik }).save();
+
+        // 2. Alıcıyı ve Göndereni Bul (Bildirim İçin)
+        const alici = await Kullanici.findById(aliciId);
+        const gonderen = await Kullanici.findById(gonderenId);
+
+        // 3. Bildirim Gönder
+        if (alici && alici.fcmToken && gonderen) {
+            // Şifreli mesaj yerine "Yeni Mesaj" yazabiliriz veya şifreyi çözemeyeceğimiz için genel mesaj.
+            await bildirimGonder(
+                alici.fcmToken,
+                gonderen.adSoyad, // Başlık: Gönderen Kişi
+                "Sana yeni bir mesaj gönderdi 💬", // İçerik
+                { type: 'chat', senderId: gonderenId } // Tıklayınca sohbete gitmesi için veri
+            );
+        }
+
+        res.json({ durum: 'basarili' });
+    } catch (e) {
+        console.error("Mesaj Hatası:", e);
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
 });
 
 app.get('/api/mesajlar/:uid1/:uid2', async (req, res) => {
@@ -866,6 +889,25 @@ app.get('/api/sohbet-listesi/:userId', async (req, res) => {
         }).select('adSoyad kullaniciAdi resimUrl');
 
         res.json(kullanicilar);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
+// --- TOPLU KULLANICI GETİRME (Takipçi/Takip Edilen Listesi İçin) ---
+app.post('/api/kullanicilari-getir', async (req, res) => {
+    const { ids } = req.body; // Flutter'dan gelen ID listesi: ["id1", "id2"]
+    
+    if (!ids || !Array.isArray(ids)) {
+        return res.json([]);
+    }
+
+    try {
+        // Bu ID'lere sahip olan kullanıcıları bul
+        const users = await Kullanici.find({ _id: { $in: ids } })
+            .select('adSoyad kullaniciAdi resimUrl'); // Sadece gerekli alanlar
+        
+        res.json(users);
     } catch (e) {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
