@@ -6,12 +6,17 @@ const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const mongoose = require('mongoose');
+const http = require('http'); // YENİ
+const { Server } = require("socket.io");
 const app = express();
+const server = http.createServer(app); // App'i server'a çevir
+const io = new Server(server); // Socket'i başlat
 
 // --- FIREBASE ADMIN KURULUMU ---
 const admin = require("firebase-admin");
 const serviceAccount = require("./serviceAccountKey.json");
 const SUPER_ADMIN_ID = "6962e30b6e6d834ae0fc9c8c";
+
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -53,8 +58,10 @@ async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
     }
 }
 
+
+// Artık şifre kodda görünmez, sunucudan çeker
+const MONGO_URI = process.env.MONGO_URI;
 // MONGODB
-const MONGO_URI = "mongodb+srv://admin:kampusum123@cluster0.dzud8wf.mongodb.net/?appName=Cluster0";
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ Veritabanı Bağlandı"))
     .catch(err => console.error("❌ Veritabanı Hatası:", err));
@@ -89,6 +96,63 @@ const KullaniciSchema = new mongoose.Schema({
     },
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
+
+// --- SOCKET.IO MANTIĞI (En önemli kısım) ---
+let onlineKullanicilar = {}; // { "userId": "socketId" } şeklinde tutacağız
+
+io.on('connection', (socket) => {
+    console.log('Bir kullanıcı bağlandı:', socket.id);
+
+    // 1. Kullanıcı Giriş Yaptığında Kaydet
+    socket.on('giris_yap', (userId) => {
+        onlineKullanicilar[userId] = socket.id;
+        console.log("Online oldu:", userId);
+    });
+
+    // 2. "Yazıyor..." Sinyali
+    socket.on('yaziyor_basladi', (data) => {
+        const { aliciId, gonderenIsim } = data;
+        const hedefSocketId = onlineKullanicilar[aliciId];
+        
+        if (hedefSocketId) {
+            io.to(hedefSocketId).emit('karsi_taraf_yaziyor', { yazan: gonderenIsim });
+        }
+    });
+
+    socket.on('yaziyor_bitti', (data) => {
+        const { aliciId } = data;
+        const hedefSocketId = onlineKullanicilar[aliciId];
+        
+        if (hedefSocketId) {
+            io.to(hedefSocketId).emit('karsi_taraf_durdu');
+        }
+    });
+
+    // 3. Okundu Bilgisi
+    socket.on('mesaj_okundu', async (data) => {
+        const { mesajId, gonderenId } = data;
+        
+        // Veritabanında güncelle
+        await Mesaj.findByIdAndUpdate(mesajId, { okundu: true });
+
+        // Gönderene "Mavi Tik" bilgisini ilet
+        const hedefSocketId = onlineKullanicilar[gonderenId];
+        if (hedefSocketId) {
+            io.to(hedefSocketId).emit('mesaj_okundu_onayi', { mesajId });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        // Kullanıcı çıkınca listeden silmek gerekir (basit mantık)
+        // onlineKullanicilar içinden bu socket.id'yi bulup silebilirsin.
+    });
+});
+
+// DİKKAT: app.listen yerine server.listen kullanmalısın!
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor`);
+});
 
 // --- ŞİKAYET / RAPOR ŞEMASI ---
 const RaporSchema = new mongoose.Schema({
@@ -159,7 +223,8 @@ const MesajSchema = new mongoose.Schema({
     gonderenId: String,
     aliciId: String,
     icerik: String,
-    tarih: { type: Date, default: Date.now }
+    tarih: { type: Date, default: Date.now },
+    okundu: { type: Boolean, default: false }
 });
 const Mesaj = mongoose.model('Mesaj', MesajSchema);
 
@@ -934,4 +999,4 @@ app.get('/api/akis-takip/:userId', async (req, res) => {
     }
 });
 
-app.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
+server.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
