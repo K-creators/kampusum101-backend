@@ -913,4 +913,25 @@ app.post('/api/kullanicilari-getir', async (req, res) => {
     }
 });
 
+// --- TAKİP EDİLENLERİN GÖNDERİLERİNİ GETİR ---
+app.get('/api/akis-takip/:userId', async (req, res) => {
+    try {
+        const user = await Kullanici.findById(req.params.userId);
+        if (!user) return res.status(404).json({ mesaj: "Kullanıcı bulunamadı" });
+
+        // Kullanıcının takip ettiği kişilerin listesini al
+        const takipEdilenler = user.takipEdilenler || [];
+        
+        // Kendi gönderilerini de görmek isteyebilir (Opsiyonel)
+        takipEdilenler.push(req.params.userId);
+
+        // Bu ID'lere sahip yazarların gönderilerini bul
+        const gonderiler = await Gonderi.find({ yazarId: { $in: takipEdilenler } }).sort({ tarih: -1 });
+        
+        res.json(gonderiler);
+    } catch (e) {
+        res.status(500).json({ durum: 'hata', mesaj: e.message });
+    }
+});
+
 app.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
