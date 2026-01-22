@@ -148,12 +148,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// DİKKAT: app.listen yerine server.listen kullanmalısın!
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor`);
-});
-
 // --- ŞİKAYET / RAPOR ŞEMASI ---
 const RaporSchema = new mongoose.Schema({
     sikayetEdenId: String,
@@ -999,4 +993,8 @@ app.get('/api/akis-takip/:userId', async (req, res) => {
     }
 });
 
-server.listen(port, () => console.log(`Sunucu ${port} portunda çalışıyor...`));
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor... 🚀`);
+});
