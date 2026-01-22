@@ -11,6 +11,7 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app); // App'i server'a çevir
 const io = new Server(server); // Socket'i başlat
+const Filter = require('bad-words');
 
 // --- FIREBASE ADMIN KURULUMU ---
 const admin = require("firebase-admin");
@@ -26,6 +27,20 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// --- SANSÜR SİSTEMİ AYARLARI ---
+const filter = new Filter();
+
+// Türkçe kötü kelime listesi (Burayı ihtiyacına göre genişletmelisin)
+// Not: Buraya sadece kök kelimeleri yazman yeterli.
+const turkceKotuKelimeler = [
+    "aptal", "salak", "gerizekalı", "mal", "dangalak", "ahmak", 
+    "öküz", "yavşak", "piç", "göt", "amk", "aq", "sik", "yarrak", 
+    "oç", "kaşar", "fahişe", "sürtük"
+    // ... buraya daha fazla kelime ekleyebilirsin
+];
+
+filter.addWords(...turkceKotuKelimeler);
 
 // --- YARDIMCI FONKSİYON: BİLDİRİM GÖNDER ---
 async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
@@ -597,10 +612,17 @@ app.post('/api/gonderi-olustur',
     async (req, res) => {
         try {
             const { yazarId, yazar, kullaniciAdi, bolum, icerik, profilResim } = req.body;
-
+            // --- SANSÜR DEVREYE GİRİYOR ---
+            let temizIcerik = icerik;
             let resimUrl = "";
             let pdfUrl = "";
             let pdfIsim = "";
+
+            // Eğer içerik boş değilse temizle
+            if (icerik && icerik.length > 0) {
+            // clean() fonksiyonu kötü kelimeleri **** yapar
+            temizIcerik = filter.clean(icerik); 
+            }
 
             // Eğer Resim geldiyse
             if (req.files && req.files['resim']) {
