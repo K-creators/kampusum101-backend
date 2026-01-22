@@ -514,6 +514,39 @@ const bildirimSchema = new mongoose.Schema({
 });
 const Bildirim = mongoose.model('Bildirim', bildirimSchema);
 
+// --- ŞİKAYET SİSTEMİ ---
+
+// 1. Şikayet Şeması (Veritabanı Tablosu)
+const sikayetSchema = new mongoose.Schema({
+  sikayetEdenId: String,
+  sikayetEdilenGonderiId: String,
+  sebep: String,
+  aciklama: String,
+  tarih: { type: Date, default: Date.now }
+});
+
+const Sikayet = mongoose.model('Sikayet', sikayetSchema);
+
+// 2. Şikayet Etme Endpoint'i
+app.post('/api/sikayet-et', async (req, res) => {
+  try {
+    const { sikayetEdenId, gonderiId, sebep, aciklama } = req.body;
+
+    const yeniSikayet = new Sikayet({
+      sikayetEdenId,
+      sikayetEdilenGonderiId: gonderiId,
+      sebep,
+      aciklama
+    });
+
+    await yeniSikayet.save();
+    res.status(200).json({ mesaj: "Şikayetiniz alındı. Teşekkürler." });
+
+  } catch (error) {
+    res.status(500).json({ mesaj: "Şikayet edilemedi", hata: error.message });
+  }
+});
+
 app.get('/api/bildirimler/:userId', async (req, res) => {
     try {
         const bildirimler = await Bildirim.find({ aliciId: req.params.userId }).sort({ tarih: -1 });
@@ -658,8 +691,28 @@ app.post('/api/gonderi-olustur',
     }
 );
 
-app.get('/api/akis', async (req, res) => {
-    res.json(await Gonderi.find().sort({ _id: -1 }));
+// GÜNCELLENEN GLOBAL AKIŞ (Engellenenler Hariç)
+// Artık userId parametresi alıyor
+app.get('/api/akis/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // 1. İsteği yapan kullanıcıyı ve engellediklerini bul
+    const kullanici = await Kullanici.findById(userId);
+    if (!kullanici) return res.status(404).json({ mesaj: "Kullanıcı bulunamadı" });
+
+    // Engellenenlerin ID listesi
+    const engellenenlerListesi = kullanici.engellenenler || [];
+
+    // 2. Gönderileri çek ama engellenen kişilerin gönderilerini HARİÇ TUT ($nin = not in)
+    const gonderiler = await Gonderi.find({
+      yazarId: { $nin: engellenenlerListesi } 
+    }).sort({ tarih: -1 }).limit(50); // Son 50 gönderi
+
+    res.json(gonderiler);
+  } catch (error) {
+    res.status(500).json({ mesaj: "Akış getirilemedi", hata: error.message });
+  }
 });
 
 app.post('/api/gonderi/:id/yorum', async (req, res) => {
