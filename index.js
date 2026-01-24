@@ -7,30 +7,27 @@ import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import mongoose from 'mongoose';
 import http from 'http';
 import { Server } from 'socket.io';
-import Filter from 'leo-profanity';
+import filter from 'leo-profanity'; // <-- DEĞİŞİKLİK 1: Küçük harfle import et
 import nodemailer from 'nodemailer';
 import admin from 'firebase-admin';
-import { createRequire } from 'module'; // JSON dosyasını okumak için gerekli
+import { createRequire } from 'module'; 
 
-// Ayarları Yükle
 dotenv.config();
 
-// ES Module içinde JSON dosyasını okumak için require'ı manuel oluşturuyoruz
 const require = createRequire(import.meta.url);
 const serviceAccount = require("./serviceAccountKey.json");
 
 const app = express();
-const server = http.createServer(app); // App'i server'a çevir
+const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*", // Tüm kaynaklardan gelen bağlantılara izin ver
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
 const SUPER_ADMIN_ID = "6962e30b6e6d834ae0fc9c8c";
 
-// --- FIREBASE ADMIN KURULUMU ---
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
@@ -39,14 +36,16 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // --- SANSÜR SİSTEMİ AYARLARI ---
-const filter = new Filter();
+// DEĞİŞİKLİK 2: "const filter = new Filter();" SATIRI SİLİNDİ.
+// filter zaten import edildiği gibi kullanılabilir.
 
-// Türkçe kötü kelime listesi (Burayı ihtiyacına göre genişletmelisin)
+// Türkçe kötü kelimeleri buraya ekleyebilirsin:
+// filter.add(['kotukelime1', 'kotukelime2']); 
+
 app.post('/mesaj-kontrol', (req, res) => {
     const { mesaj } = req.body;
     
-    // Mesaj temizleme örneği
-    // "kötü kelime" -> "**** kelime" yapar
+    // filter.clean direkt çalışır
     const temizMesaj = filter.clean(mesaj); 
 
     res.json({ 
@@ -65,16 +64,14 @@ async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
             title: baslik,
             body: icerik
         },
-        // --- BU KISIM EKLENDİ (SES İÇİN ÖNEMLİ) ---
         android: {
             notification: {
                 sound: 'default',
-                channelId: 'high_importance_channel', // main.dart ve manifest ile aynı olmalı
+                channelId: 'high_importance_channel',
                 priority: 'high',
                 visibility: 'public',
             }
         },
-        // ------------------------------------------
         data: data
     };
 
@@ -86,10 +83,8 @@ async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
     }
 }
 
-// Artık şifre kodda görünmez, sunucudan çeker
 const MONGO_URI = process.env.MONGO_URI;
 
-// MONGODB BAĞLANTISI
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ Veritabanı Bağlandı"))
     .catch(err => console.error("❌ Veritabanı Hatası:", err));
@@ -111,7 +106,7 @@ const KullaniciSchema = new mongoose.Schema({
     onaylandi: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
     sonKullaniciAdiDegisikligi: { type: Date, default: null },
-    dogrulamaKodu: { type: String, default: "" }, // Hesap silme için
+    dogrulamaKodu: { type: String, default: "" },
     ozgecmis: {
         hakkinda: { type: String, default: "" },
         okul: { type: String, default: "" },
@@ -125,19 +120,17 @@ const KullaniciSchema = new mongoose.Schema({
 });
 const Kullanici = mongoose.model('Kullanici', KullaniciSchema);
 
-// --- SOCKET.IO MANTIĞI (En önemli kısım) ---
-let onlineKullanicilar = {}; // { "userId": "socketId" } şeklinde tutacağız
+// --- SOCKET.IO ---
+let onlineKullanicilar = {}; 
 
 io.on('connection', (socket) => {
     console.log('Bir kullanıcı bağlandı:', socket.id);
 
-    // 1. Kullanıcı Giriş Yaptığında Kaydet
     socket.on('giris_yap', (userId) => {
         onlineKullanicilar[userId] = socket.id;
         console.log("Online oldu:", userId);
     });
 
-    // 2. "Yazıyor..." Sinyali
     socket.on('yaziyor_basladi', (data) => {
         const { aliciId, gonderenIsim } = data;
         const hedefSocketId = onlineKullanicilar[aliciId];
@@ -156,14 +149,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 3. Okundu Bilgisi
     socket.on('mesaj_okundu', async (data) => {
         const { mesajId, gonderenId } = data;
         
-        // Veritabanında güncelle
         await Mesaj.findByIdAndUpdate(mesajId, { okundu: true });
 
-        // Gönderene "Mavi Tik" bilgisini ilet
         const hedefSocketId = onlineKullanicilar[gonderenId];
         if (hedefSocketId) {
             io.to(hedefSocketId).emit('mesaj_okundu_onayi', { mesajId });
@@ -171,28 +161,24 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // Kullanıcı çıkınca listeden silmek gerekir
     });
 });
 
-// --- ŞİKAYET / RAPOR ŞEMASI ---
 const RaporSchema = new mongoose.Schema({
     sikayetEdenId: String,
-    sikayetEdilenId: String, // Kullanıcı veya Gönderi ID'si
+    sikayetEdilenId: String, 
     tur: { type: String, enum: ['gonderi', 'kullanici', 'yorum'], default: 'gonderi' },
     sebep: String,
     aciklama: { type: String, default: "" },
     tarih: { type: Date, default: Date.now },
-    durum: { type: String, default: 'bekliyor' } // bekliyor, incelendi, silindi
+    durum: { type: String, default: 'bekliyor' }
 });
 const Rapor = mongoose.model('Rapor', RaporSchema);
 
-// --- İÇERİK ŞİKAYET ETME ROTASI ---
 app.post('/api/sikayet-et', async (req, res) => {
     const { sikayetEdenId, sikayetEdilenId, tur, sebep, aciklama } = req.body;
 
     try {
-        // Aynı kişi aynı içeriği daha önce şikayet etmiş mi?
         const varMi = await Rapor.findOne({ sikayetEdenId, sikayetEdilenId, tur });
         
         if (varMi) {
@@ -208,7 +194,6 @@ app.post('/api/sikayet-et', async (req, res) => {
         });
 
         await yeniRapor.save();
-
         res.json({ durum: 'basarili', mesaj: 'Bildiriminiz alındı. Teşekkürler.' });
 
     } catch (error) {
@@ -216,7 +201,6 @@ app.post('/api/sikayet-et', async (req, res) => {
     }
 });
 
-// Token İşlemleri
 app.post('/api/fcm-token-kaydet', async (req, res) => {
     const { userId, token } = req.body;
     try {
@@ -263,12 +247,11 @@ const GonderiSchema = new mongoose.Schema({
         profilResim: String,
         tarih: String
     }],
-    pdfUrl: { type: String, default: "" },   // PDF dosya yolu
-    pdfIsim: { type: String, default: "" },  // PDF'in orijinal adı
+    pdfUrl: { type: String, default: "" },
+    pdfIsim: { type: String, default: "" },
 }, { timestamps: true });
 const Gonderi = mongoose.model('Gonderi', GonderiSchema);
 
-// CLOUDINARY
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -278,7 +261,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: { 
         folder: 'kampusum101_uploads', 
-        resource_type: 'auto', // Cloudinary'nin dosya türünü (PDF/Resim) otomatik anlamasını sağlar
+        resource_type: 'auto', 
         allowed_formats: ['jpg', 'png', 'jpeg', 'heic', 'pdf'] 
     },
 });
@@ -293,7 +276,6 @@ const tarihGetir = () => {
 
 app.get('/', (req, res) => res.send('API Aktif'));
 
-// AŞAMA 1: Kaydı Başlat
 app.post('/api/kayit-baslat', async (req, res) => {
     const { adSoyad, kullaniciAdi, email, sifre } = req.body;
     const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
@@ -304,7 +286,7 @@ app.post('/api/kayit-baslat', async (req, res) => {
             mesaj: 'Kullanıcı adı 3-20 karakter olmalı ve sadece harf, rakam veya _ içermelidir.'
         });
     }
-    // EDU.TR KONTROLÜ
+
     if (!email.endsWith('.edu.tr')) {
         return res.status(400).json({ durum: 'hata', mesaj: 'Sadece .edu.tr uzantılı mail adresleri kabul edilmektedir!' });
     }
@@ -364,7 +346,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// --- HESAP SİLME 1. AŞAMA: Şifre Kontrolü ve Kod Gönderme ---
 app.post('/api/hesap-sil-baslat', async (req, res) => {
     const { userId, sifre } = req.body;
 
@@ -400,7 +381,6 @@ app.post('/api/hesap-sil-baslat', async (req, res) => {
     }
 });
 
-// --- HESAP SİLME 2. AŞAMA: Kodu Doğrula ve SİL ---
 app.post('/api/hesap-sil-onayla', async (req, res) => {
     const { userId, kod } = req.body;
 
@@ -436,7 +416,6 @@ app.post('/api/kayit-tamamla', async (req, res) => {
     }
 });
 
-// 2. GİRİŞ
 app.post('/api/giris', async (req, res) => {
     const { email, sifre } = req.body;
     const k = await Kullanici.findOne({ email, sifre });
@@ -448,26 +427,21 @@ app.post('/api/giris', async (req, res) => {
     else res.status(401).json({ durum: 'hata', mesaj: 'Hatalı bilgiler' });
 });
 
-// 3. MESAJLAŞMA (GÜNCELLENDİ: BİLDİRİMLİ)
 app.post('/api/mesaj-gonder', async (req, res) => {
     const { gonderenId, aliciId, icerik } = req.body;
     
     try {
-        // 1. Mesajı Kaydet
         await new Mesaj({ gonderenId, aliciId, icerik }).save();
 
-        // 2. Alıcıyı ve Göndereni Bul (Bildirim İçin)
         const alici = await Kullanici.findById(aliciId);
         const gonderen = await Kullanici.findById(gonderenId);
 
-        // 3. Bildirim Gönder
         if (alici && alici.fcmToken && gonderen) {
-            // Şifreli mesaj yerine "Yeni Mesaj" yazabiliriz veya şifreyi çözemeyeceğimiz için genel mesaj.
             await bildirimGonder(
                 alici.fcmToken,
-                gonderen.adSoyad, // Başlık: Gönderen Kişi
-                "Sana yeni bir mesaj gönderdi 💬", // İçerik
-                { type: 'chat', senderId: gonderenId } // Tıklayınca sohbete gitmesi için veri
+                gonderen.adSoyad, 
+                "Sana yeni bir mesaj gönderdi 💬", 
+                { type: 'chat', senderId: gonderenId } 
             );
         }
 
@@ -496,7 +470,6 @@ app.delete('/api/mesaj-sil/:id', async (req, res) => {
     }
 });
 
-// --- TÜM SOHBETİ SİLME ROTASI ---
 app.delete('/api/sohbet-sil/:user1/:user2', async (req, res) => {
     try {
         const { user1, user2 } = req.params;
@@ -512,7 +485,6 @@ app.delete('/api/sohbet-sil/:user1/:user2', async (req, res) => {
     }
 });
 
-// --- BİLDİRİM ŞEMASI VE GETİRME ---
 const bildirimSchema = new mongoose.Schema({
     aliciId: String,
     gonderenId: String,
@@ -523,10 +495,7 @@ const bildirimSchema = new mongoose.Schema({
 });
 const Bildirim = mongoose.model('Bildirim', bildirimSchema);
 
-// --- ŞİKAYET SİSTEMİ ---
-
-// 1. Şikayet Şeması (Veritabanı Tablosu)
-const sikayetSchema = new mongoose.Schema({
+const SikayetSchema = new mongoose.Schema({
   sikayetEdenId: String,
   sikayetEdilenGonderiId: String,
   sebep: String,
@@ -534,7 +503,7 @@ const sikayetSchema = new mongoose.Schema({
   tarih: { type: Date, default: Date.now }
 });
 
-const Sikayet = mongoose.model('Sikayet', sikayetSchema);
+const Sikayet = mongoose.model('Sikayet', SikayetSchema);
 
 app.get('/api/bildirimler/:userId', async (req, res) => {
     try {
@@ -557,13 +526,11 @@ app.get('/ping', (req, res) => {
     res.send('Pong! Sunucu ayakta 🚀');
 });
 
-// Sohbet Listesi
 app.get('/api/sohbet-gecmisi/:myId', async (req, res) => {
     const users = await Kullanici.find({ _id: { $ne: req.params.myId } });
     res.json(users);
 });
 
-// 4. ŞİFRE DEĞİŞTİRME
 app.post('/api/sifre-degistir', async (req, res) => {
     const { userId, eskiSifre, yeniSifre } = req.body;
     const k = await Kullanici.findById(userId);
@@ -576,7 +543,6 @@ app.post('/api/sifre-degistir', async (req, res) => {
     }
 });
 
-// 5. PROFİL GÜNCELLEME
 app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     const { id, adSoyad, kullaniciAdi, bolum, bio, ozgecmis } = req.body;
 
@@ -584,7 +550,6 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
         const user = await Kullanici.findById(id);
         if (!user) return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı' });
 
-        // KULLANICI ADI DEĞİŞİKLİĞİ
         if (kullaniciAdi && kullaniciAdi !== user.kullaniciAdi) {
             const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
             if (!usernameRegex.test(kullaniciAdi)) {
@@ -628,32 +593,26 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     }
 });
 
-// --- GÖNDERİ OLUŞTURMA (PDF VE RESİM DESTEKLİ) ---
 app.post('/api/gonderi-olustur',
     upload.fields([{ name: 'resim', maxCount: 1 }, { name: 'belge', maxCount: 1 }]),
     async (req, res) => {
         try {
             const { yazarId, yazar, kullaniciAdi, bolum, icerik, profilResim } = req.body;
-            // --- SANSÜR DEVREYE GİRİYOR ---
             let temizIcerik = icerik;
             let resimUrl = "";
             let pdfUrl = "";
             let pdfIsim = "";
 
-            // Eğer içerik boş değilse temizle
             if (icerik && icerik.length > 0) {
-            // clean() fonksiyonu kötü kelimeleri **** yapar
             temizIcerik = filter.clean(icerik); 
             }
 
-            // Eğer Resim geldiyse
             if (req.files && req.files['resim']) {
-                resimUrl = req.files['resim'][0].path; // Cloudinary path
+                resimUrl = req.files['resim'][0].path; 
             }
 
-            // Eğer PDF (Belge) geldiyse
             if (req.files && req.files['belge']) {
-                pdfUrl = req.files['belge'][0].path; // Cloudinary path
+                pdfUrl = req.files['belge'][0].path; 
                 pdfIsim = req.files['belge'][0].originalname;
             }
 
@@ -680,23 +639,18 @@ app.post('/api/gonderi-olustur',
     }
 );
 
-// GÜNCELLENEN GLOBAL AKIŞ (Engellenenler Hariç)
-// Artık userId parametresi alıyor
 app.get('/api/akis/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
     
-    // 1. İsteği yapan kullanıcıyı ve engellediklerini bul
     const kullanici = await Kullanici.findById(userId);
     if (!kullanici) return res.status(404).json({ mesaj: "Kullanıcı bulunamadı" });
 
-    // Engellenenlerin ID listesi
     const engellenenlerListesi = kullanici.engellenenler || [];
 
-    // 2. Gönderileri çek ama engellenen kişilerin gönderilerini HARİÇ TUT ($nin = not in)
     const gonderiler = await Gonderi.find({
       yazarId: { $nin: engellenenlerListesi } 
-    }).sort({ tarih: -1 }).limit(50); // Son 50 gönderi
+    }).sort({ tarih: -1 }).limit(50); 
 
     res.json(gonderiler);
   } catch (error) {
@@ -716,7 +670,6 @@ app.post('/api/gonderi/:id/yorum', async (req, res) => {
     } else res.status(404).json({ durum: 'hata' });
 });
 
-// Profil Sayfası İçin Kullanıcı Bilgisi Çekme
 app.get('/api/kullanici/:id', async (req, res) => {
     try {
         const k = await Kullanici.findById(req.params.id);
@@ -725,7 +678,6 @@ app.get('/api/kullanici/:id', async (req, res) => {
     } catch (e) { res.status(404).json({}); }
 });
 
-// Profil Sayfasında "Gönderilerim" Kısmı
 app.get('/api/gonderilerim', async (req, res) => {
     try {
         const { yazarId } = req.query;
@@ -738,7 +690,6 @@ app.get('/api/gonderilerim', async (req, res) => {
     }
 });
 
-// Gönderi Beğenme
 app.post('/api/gonderi/:id/begen', async (req, res) => {
     const { id } = req.params;
     const { yazar } = req.body;
@@ -753,7 +704,6 @@ app.post('/api/gonderi/:id/begen', async (req, res) => {
     } catch (e) { res.status(500).json({ durum: 'hata' }); }
 });
 
-// Gönderi Silme
 app.delete('/api/gonderi-sil/:id', async (req, res) => {
     try {
         await Gonderi.findByIdAndDelete(req.params.id);
@@ -773,7 +723,6 @@ app.delete('/api/gonderi/:gonderiId/yorum/:yorumId', async (req, res) => {
     }
 });
 
-// TEKİL DOSYA YÜKLEME ROTASI (Sertifika/Proje için)
 app.post('/api/dosya-yukle', upload.single('dosya'), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ durum: 'hata', mesaj: 'Dosya seçilmedi' });
@@ -783,7 +732,6 @@ app.post('/api/dosya-yukle', upload.single('dosya'), (req, res) => {
     }
 });
 
-// --- KULLANICI ARAMA ---
 app.get('/api/kullanici-ara', async (req, res) => {
     try {
         const q = req.query.q || "";
@@ -806,7 +754,6 @@ app.get('/api/kullanici-ara', async (req, res) => {
     }
 });
 
-// --- TAKİP ET / TAKİBİ BIRAK ROTASI ---
 app.post('/api/kullanici-takip', async (req, res) => {
     const { aktifKullaniciId, hedefKullaniciId } = req.body;
 
@@ -823,13 +770,11 @@ app.post('/api/kullanici-takip', async (req, res) => {
         }
 
         if (hedefKullanici.takipciler.includes(aktifKullaniciId)) {
-            // TAKİBİ BIRAK
             await hedefKullanici.updateOne({ $pull: { takipciler: aktifKullaniciId } });
             await aktifKullanici.updateOne({ $pull: { takipEdilenler: hedefKullaniciId } });
             res.json({ durum: 'basarili', islem: 'takip_birakildi', mesaj: 'Takip bırakıldı' });
 
         } else {
-            // TAKİP ET
             await hedefKullanici.updateOne({ $push: { takipciler: aktifKullaniciId } });
             await aktifKullanici.updateOne({ $push: { takipEdilenler: hedefKullaniciId } });
 
@@ -857,7 +802,6 @@ app.post('/api/kullanici-takip', async (req, res) => {
     }
 });
 
-// --- ADMIN: HERKESE BİLDİRİM GÖNDER ---
 app.post('/api/herkese-bildirim-gonder', async (req, res) => {
     const { gonderenAdminId, baslik, mesaj } = req.body;
     if (gonderenAdminId !== SUPER_ADMIN_ID) {
@@ -874,7 +818,6 @@ app.post('/api/herkese-bildirim-gonder', async (req, res) => {
     }
 });
 
-// --- ŞİFRE SIFIRLAMA (KOD GÖNDERME) ROTASI ---
 app.post('/api/sifremi-unuttum', async (req, res) => {
     try {
         const { email } = req.body;
@@ -885,14 +828,13 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
             return res.status(404).json({ durum: 'hata', mesaj: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
         }
 
-        // Rastgele 6 haneli kod üret
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
         user.onayKodu = verificationCode;
         await user.save();
 
         await transporter.sendMail({
-            from: 'Kampüsüm101 <karakus.job@outlook.com>', // Burayı kendi mailinle güncelle
+            from: 'Kampüsüm101 <karakus.job@outlook.com>', 
             to: email,
             subject: 'Şifre Sıfırlama Kodu - Kampüsüm101',
             text: `Merhaba ${user.adSoyad},\n\nŞifreni sıfırlamak için doğrulama kodun: ${verificationCode}\n\nBu işlemi sen yapmadıysan bu maili dikkate alma.`
@@ -906,27 +848,21 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
     }
 });
 
-// --- ŞİFRE YENİLEME (2. AŞAMA: KODU GİR VE DEĞİŞTİR) ---
 app.post('/api/sifre-yenile', async (req, res) => {
     const { email, kod, yeniSifre } = req.body;
 
     try {
-        // 1. Kullanıcıyı bul
         const user = await Kullanici.findOne({ email });
 
         if (!user) {
             return res.status(404).json({ durum: 'hata', mesaj: 'Kullanıcı bulunamadı.' });
         }
 
-        // 2. Kodu Kontrol Et (Önceki adımda 'onayKodu'na kaydetmiştik)
         if (!user.onayKodu || user.onayKodu.trim() !== kod.trim()) {
             return res.status(400).json({ durum: 'hata', mesaj: 'Girdiğiniz kod hatalı veya süresi dolmuş!' });
         }
 
-        // 3. Şifreyi Güncelle
         user.sifre = yeniSifre;
-        
-        // 4. Kodu sil (Güvenlik için, tekrar kullanılamasın)
         user.onayKodu = ""; 
         
         await user.save();
@@ -939,7 +875,6 @@ app.post('/api/sifre-yenile', async (req, res) => {
     }
 });
 
-// --- KULLANICI ENGELLEME ROTASI ---
 app.post('/api/kullanici-engelle', async (req, res) => {
     const { aktifKullaniciId, hedefKullaniciId } = req.body;
 
@@ -949,14 +884,11 @@ app.post('/api/kullanici-engelle', async (req, res) => {
         if (!aktifKullanici) return res.status(404).json({ durum: 'hata' });
 
         if (aktifKullanici.engellenenler.includes(hedefKullaniciId)) {
-            // Zaten engelli, engeli kaldır
             await aktifKullanici.updateOne({ $pull: { engellenenler: hedefKullaniciId } });
             res.json({ durum: 'basarili', mesaj: 'Engel kaldırıldı.' });
         } else {
-            // Engelle
             await aktifKullanici.updateOne({ $push: { engellenenler: hedefKullaniciId } });
             
-            // Varsa takipleşmeyi de bitir
             await aktifKullanici.updateOne({ $pull: { takipciler: hedefKullaniciId, takipEdilenler: hedefKullaniciId } });
             await Kullanici.findByIdAndUpdate(hedefKullaniciId, { 
                 $pull: { takipciler: aktifKullaniciId, takipEdilenler: aktifKullaniciId } 
@@ -974,10 +906,9 @@ app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
         const user = await Kullanici.findById(req.params.userId);
         if (!user) return res.json([]);
         
-        // Engellenen ID'leri kullanarak o kullanıcıların detaylarını bul
         const engellenenKullanicilar = await Kullanici.find({
             '_id': { $in: user.engellenenler }
-        }).select('adSoyad kullaniciAdi resimUrl'); // Sadece gerekli alanlar
+        }).select('adSoyad kullaniciAdi resimUrl'); 
 
         res.json(engellenenKullanicilar);
     } catch (e) {
@@ -985,24 +916,20 @@ app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
     }
 });
 
-// --- MESAJLAŞILAN KİŞİLERİ LİSTELE ---
 app.get('/api/sohbet-listesi/:userId', async (req, res) => {
     try {
         const myId = req.params.userId;
 
-        // 1. Benim dahil olduğum tüm mesajları bul
         const mesajlar = await Mesaj.find({
             $or: [{ gonderenId: myId }, { aliciId: myId }]
-        }).sort({ tarih: -1 }); // En yeniden eskiye
+        }).sort({ tarih: -1 }); 
 
-        // 2. Mesajlaştığım kişilerin ID'lerini (Tekrar etmeden) topla
         const konusulanIdler = new Set();
         mesajlar.forEach(m => {
             if (m.gonderenId !== myId) konusulanIdler.add(m.gonderenId);
             if (m.aliciId !== myId) konusulanIdler.add(m.aliciId);
         });
 
-        // 3. Bu ID'lerin detaylarını Kullanıcı tablosundan çek
         const kullanicilar = await Kullanici.find({
             '_id': { $in: Array.from(konusulanIdler) }
         }).select('adSoyad kullaniciAdi resimUrl');
@@ -1013,18 +940,16 @@ app.get('/api/sohbet-listesi/:userId', async (req, res) => {
     }
 });
 
-// --- TOPLU KULLANICI GETİRME (Takipçi/Takip Edilen Listesi İçin) ---
 app.post('/api/kullanicilari-getir', async (req, res) => {
-    const { ids } = req.body; // Flutter'dan gelen ID listesi: ["id1", "id2"]
+    const { ids } = req.body; 
     
     if (!ids || !Array.isArray(ids)) {
         return res.json([]);
     }
 
     try {
-        // Bu ID'lere sahip olan kullanıcıları bul
         const users = await Kullanici.find({ _id: { $in: ids } })
-            .select('adSoyad kullaniciAdi resimUrl'); // Sadece gerekli alanlar
+            .select('adSoyad kullaniciAdi resimUrl'); 
         
         res.json(users);
     } catch (e) {
@@ -1032,19 +957,15 @@ app.post('/api/kullanicilari-getir', async (req, res) => {
     }
 });
 
-// --- TAKİP EDİLENLERİN GÖNDERİLERİNİ GETİR ---
 app.get('/api/akis-takip/:userId', async (req, res) => {
     try {
         const user = await Kullanici.findById(req.params.userId);
         if (!user) return res.status(404).json({ mesaj: "Kullanıcı bulunamadı" });
 
-        // Kullanıcının takip ettiği kişilerin listesini al
         const takipEdilenler = user.takipEdilenler || [];
         
-        // Kendi gönderilerini de görmek isteyebilir (Opsiyonel)
         takipEdilenler.push(req.params.userId);
 
-        // Bu ID'lere sahip yazarların gönderilerini bul
         const gonderiler = await Gonderi.find({ yazarId: { $in: takipEdilenler } }).sort({ tarih: -1 });
         
         res.json(gonderiler);
@@ -1053,7 +974,6 @@ app.get('/api/akis-takip/:userId', async (req, res) => {
     }
 });
 
-// Tek ve Doğru PORT Tanımlaması
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
