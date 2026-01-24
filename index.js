@@ -11,7 +11,7 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app); // App'i server'a çevir
 const io = new Server(server); // Socket'i başlat
-const Filter = require('bad-words');
+const Filter = require('leo-profanity');
 
 // --- FIREBASE ADMIN KURULUMU ---
 const admin = require("firebase-admin");
@@ -32,15 +32,18 @@ app.use(express.json({ limit: '50mb' }));
 const filter = new Filter();
 
 // Türkçe kötü kelime listesi (Burayı ihtiyacına göre genişletmelisin)
-// Not: Buraya sadece kök kelimeleri yazman yeterli.
-const turkceKotuKelimeler = [
-    "aptal", "salak", "gerizekalı", "mal", "dangalak", "ahmak", 
-    "öküz", "yavşak", "piç", "göt", "amk", "aq", "sik", "yarrak", 
-    "oç", "kaşar", "fahişe", "sürtük"
-    // ... buraya daha fazla kelime ekleyebilirsin
-];
+app.post('/mesaj-kontrol', (req, res) => {
+    const { mesaj } = req.body;
+    
+    // Mesaj temizleme örneği
+    // "kötü kelime" -> "**** kelime" yapar
+    const temizMesaj = filter.clean(mesaj); 
 
-filter.addWords(...turkceKotuKelimeler);
+    res.json({ 
+        orijinal: mesaj, 
+        temiz: temizMesaj 
+    });
+});
 
 // --- YARDIMCI FONKSİYON: BİLDİRİM GÖNDER ---
 async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
