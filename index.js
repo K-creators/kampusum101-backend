@@ -1,29 +1,39 @@
-require('dotenv').config();
-const nodemailer = require('nodemailer');
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const { v2: cloudinary } = require('cloudinary');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const mongoose = require('mongoose');
-const http = require('http'); // YENİ
-const { Server } = require("socket.io");
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import mongoose from 'mongoose';
+import http from 'http';
+import { Server } from 'socket.io';
+import Filter from 'leo-profanity';
+import nodemailer from 'nodemailer';
+import admin from 'firebase-admin';
+import { createRequire } from 'module'; // JSON dosyasını okumak için gerekli
+
+// Ayarları Yükle
+dotenv.config();
+
+// ES Module içinde JSON dosyasını okumak için require'ı manuel oluşturuyoruz
+const require = createRequire(import.meta.url);
+const serviceAccount = require("./serviceAccountKey.json");
+
 const app = express();
 const server = http.createServer(app); // App'i server'a çevir
-const io = new Server(server); // Socket'i başlat
-const Filter = require('leo-profanity');
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Tüm kaynaklardan gelen bağlantılara izin ver
+        methods: ["GET", "POST"]
+    }
+});
 
-// --- FIREBASE ADMIN KURULUMU ---
-const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 const SUPER_ADMIN_ID = "6962e30b6e6d834ae0fc9c8c";
 
-
+// --- FIREBASE ADMIN KURULUMU ---
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
-
-const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -76,10 +86,10 @@ async function bildirimGonder(hedefToken, baslik, icerik, data = {}) {
     }
 }
 
-
 // Artık şifre kodda görünmez, sunucudan çeker
 const MONGO_URI = process.env.MONGO_URI;
-// MONGODB
+
+// MONGODB BAĞLANTISI
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ Veritabanı Bağlandı"))
     .catch(err => console.error("❌ Veritabanı Hatası:", err));
@@ -161,8 +171,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // Kullanıcı çıkınca listeden silmek gerekir (basit mantık)
-        // onlineKullanicilar içinden bu socket.id'yi bulup silebilirsin.
+        // Kullanıcı çıkınca listeden silmek gerekir
     });
 });
 
@@ -199,9 +208,6 @@ app.post('/api/sikayet-et', async (req, res) => {
         });
 
         await yeniRapor.save();
-
-        // Admin'e bildirim gönderme (Opsiyonel)
-        // Burada SUPER_ADMIN_ID'ye bildirim atabilirsin.
 
         res.json({ durum: 'basarili', mesaj: 'Bildiriminiz alındı. Teşekkürler.' });
 
@@ -272,7 +278,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: { 
         folder: 'kampusum101_uploads', 
-        resource_type: 'auto', // <--- KRİTİK EKLEME: Cloudinary'nin dosya türünü (PDF/Resim) otomatik anlamasını sağlar
+        resource_type: 'auto', // Cloudinary'nin dosya türünü (PDF/Resim) otomatik anlamasını sağlar
         allowed_formats: ['jpg', 'png', 'jpeg', 'heic', 'pdf'] 
     },
 });
@@ -530,26 +536,6 @@ const sikayetSchema = new mongoose.Schema({
 
 const Sikayet = mongoose.model('Sikayet', sikayetSchema);
 
-// 2. Şikayet Etme Endpoint'i
-app.post('/api/sikayet-et', async (req, res) => {
-  try {
-    const { sikayetEdenId, gonderiId, sebep, aciklama } = req.body;
-
-    const yeniSikayet = new Sikayet({
-      sikayetEdenId,
-      sikayetEdilenGonderiId: gonderiId,
-      sebep,
-      aciklama
-    });
-
-    await yeniSikayet.save();
-    res.status(200).json({ mesaj: "Şikayetiniz alındı. Teşekkürler." });
-
-  } catch (error) {
-    res.status(500).json({ mesaj: "Şikayet edilemedi", hata: error.message });
-  }
-});
-
 app.get('/api/bildirimler/:userId', async (req, res) => {
     try {
         const bildirimler = await Bildirim.find({ aliciId: req.params.userId }).sort({ tarih: -1 });
@@ -642,7 +628,7 @@ app.post('/api/profil-guncelle', upload.single('resim'), async (req, res) => {
     }
 });
 
-// --- GÖNDERİ OLUŞTURMA (PDF VE RESİM DESTEKLİ - DÜZELTİLMİŞ HALİ) ---
+// --- GÖNDERİ OLUŞTURMA (PDF VE RESİM DESTEKLİ) ---
 app.post('/api/gonderi-olustur',
     upload.fields([{ name: 'resim', maxCount: 1 }, { name: 'belge', maxCount: 1 }]),
     async (req, res) => {
@@ -893,22 +879,18 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
     try {
         const { email } = req.body;
         
-        // DÜZELTME 1: 'User' yerine senin tanımladığın 'Kullanici' modelini kullanıyoruz.
         const user = await Kullanici.findOne({ email });
         
         if (!user) {
-            // DÜZELTME 2: 'success' yerine 'durum' formatı kullanıyoruz (App standardı).
             return res.status(404).json({ durum: 'hata', mesaj: "Bu e-posta ile kayıtlı kullanıcı bulunamadı." });
         }
 
         // Rastgele 6 haneli kod üret
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // DÜZELTME 3: Şemanda 'resetCode' yok. Var olan 'onayKodu' alanını kullanıyoruz.
         user.onayKodu = verificationCode;
         await user.save();
 
-        // DÜZELTME 4: 'sendEmail' fonksiyonun yoktu. Mevcut 'transporter'ı kullanıyoruz.
         await transporter.sendMail({
             from: 'Kampüsüm101 <karakus.job@outlook.com>', // Burayı kendi mailinle güncelle
             to: email,
@@ -920,7 +902,6 @@ app.post('/api/sifremi-unuttum', async (req, res) => {
 
     } catch (error) {
         console.error("Şifre sıfırlama hatası:", error);
-        // Hata durumunda HTML değil JSON dönüyoruz ki uygulama çökmesin.
         res.status(500).json({ durum: 'hata', mesaj: "Sunucu hatası: " + error.message });
     }
 });
@@ -938,7 +919,6 @@ app.post('/api/sifre-yenile', async (req, res) => {
         }
 
         // 2. Kodu Kontrol Et (Önceki adımda 'onayKodu'na kaydetmiştik)
-        // NOT: Kodlar string olduğu için === kullanıyoruz, trim() boşlukları temizler.
         if (!user.onayKodu || user.onayKodu.trim() !== kod.trim()) {
             return res.status(400).json({ durum: 'hata', mesaj: 'Girdiğiniz kod hatalı veya süresi dolmuş!' });
         }
@@ -958,6 +938,7 @@ app.post('/api/sifre-yenile', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: 'Sunucu hatası: ' + error.message });
     }
 });
+
 // --- KULLANICI ENGELLEME ROTASI ---
 app.post('/api/kullanici-engelle', async (req, res) => {
     const { aktifKullaniciId, hedefKullaniciId } = req.body;
@@ -987,7 +968,7 @@ app.post('/api/kullanici-engelle', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
-// index.js -> En alta ekle
+
 app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
     try {
         const user = await Kullanici.findById(req.params.userId);
@@ -1003,6 +984,7 @@ app.get('/api/engellenenler-listesi/:userId', async (req, res) => {
         res.status(500).json({ durum: 'hata', mesaj: e.message });
     }
 });
+
 // --- MESAJLAŞILAN KİŞİLERİ LİSTELE ---
 app.get('/api/sohbet-listesi/:userId', async (req, res) => {
     try {
@@ -1071,8 +1053,9 @@ app.get('/api/akis-takip/:userId', async (req, res) => {
     }
 });
 
+// Tek ve Doğru PORT Tanımlaması
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor... 🚀`);
+    console.log(`Sunucu ${PORT} portunda, Modern ES Modülleri ile çalışıyor... 🚀`);
 });
